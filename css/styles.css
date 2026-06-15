@@ -33,6 +33,9 @@ html[data-theme="light"] {
 
 * { box-sizing: border-box; }
 
+/* Respect the hidden attribute even when a class sets display. */
+[hidden] { display: none !important; }
+
 html, body {
   margin: 0;
   padding: 0;
@@ -114,12 +117,14 @@ h1, h2 { margin: 0; font-weight: 650; }
   height: 100% !important;
   border: 0;
 }
-.player-overlay {
-  position: absolute;
-  inset: 0;
+.player-overlay:not([hidden]) {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+.player-overlay {
+  position: absolute;
+  inset: 0;
   text-align: center;
   padding: 20px;
   background: rgba(0, 0, 0, 0.72);

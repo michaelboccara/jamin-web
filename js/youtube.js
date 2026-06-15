@@ -84,7 +84,6 @@ export class Player {
     await new Promise((resolve, reject) => {
       this.yt = new YT.Player(this.elementId, {
         videoId,
-        host: "https://www.youtube.com",
         playerVars: {
           enablejsapi: 1,
           playsinline: 1,
