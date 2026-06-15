@@ -30,6 +30,8 @@ const els = {
   offsetRange: $("offsetRange"), offsetReadout: $("offsetReadout"), offsetReset: $("offsetReset"),
   trackList: $("trackList"), emptyHint: $("emptyHint"),
   exportBtn: $("exportBtn"), importBtn: $("importBtn"), importFile: $("importFile"),
+  historyBtn: $("historyBtn"), historyPanel: $("historyPanel"),
+  historyList: $("historyList"), historyEmpty: $("historyEmpty"),
   themeBtn: $("themeBtn"), installBtn: $("installBtn"),
   overlay: $("playerOverlay"), overlayMsg: $("playerOverlayMsg"),
   toast: $("toast"),
@@ -142,6 +144,7 @@ async function loadVideo(videoId, { persist = true } = {}) {
     tracks = await db.getTracksByVideo(videoId);
     for (const t of tracks) await engine.addTrack(t);
     renderTracks();
+    captureVideoMeta(videoId); // fire-and-forget; refreshes history when ready
     return true;
   } catch (err) {
     const code = String(err.message || "").split(":")[1];
@@ -313,6 +316,7 @@ async function stopRecording() {
   tracks.sort((a, b) => a.startTime - b.startTime);
   await engine.addTrack(track);
   renderTracks();
+  renderHistory(); // this video now (still) has recordings — keep history fresh
   toast("Take saved.", "success");
 }
 
@@ -495,6 +499,7 @@ async function deleteTrackUI(t) {
   engine.removeTrack(t.id);
   tracks = tracks.filter((x) => x.id !== t.id);
   renderTracks();
+  renderHistory(); // deleting the last take drops the video from history
   toast("Take deleted.");
 }
 
@@ -559,10 +564,141 @@ els.importFile.addEventListener("change", async () => {
       await loadVideo(currentVideoId); // refresh list + engine
     } else if (confirm("Imported takes belong to a different video. Load it now?")) {
       await loadVideo(targetVideo);
+    } else {
+      captureVideoMeta(targetVideo); // grab title/author so history reads nicely
     }
+    renderHistory();
   } catch (err) {
     toast("Import failed: " + err.message, "error");
   }
+});
+
+// ---------- Play history ----------
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Best-effort capture of the video's title + author so the history dropdown
+// can show something friendlier than a bare ID. getVideoData() is empty for a
+// short moment after load, so poll briefly; fall back to YouTube's oEmbed.
+async function captureVideoMeta(videoId) {
+  let title = "";
+  let author = "";
+
+  // Poll the player only while this video is the one actually loaded.
+  if (currentVideoId === videoId) {
+    for (let i = 0; i < 15; i++) {
+      if (currentVideoId !== videoId) return; // user moved on to another video
+      const data = player.getVideoData?.();
+      if (data && data.title) { title = data.title; author = data.author || ""; break; }
+      await sleep(200);
+    }
+  }
+
+  if (!title) {
+    try {
+      const res = await fetch(
+        `https://www.youtube.com/oembed?format=json&url=https://www.youtube.com/watch?v=${videoId}`
+      );
+      if (res.ok) {
+        const j = await res.json();
+        title = j.title || "";
+        author = j.author_name || "";
+      }
+    } catch { /* offline / blocked — keep what we have */ }
+  }
+
+  await db.putVideoMeta({ videoId, title, author, updatedAt: Date.now() });
+  renderHistory();
+}
+
+async function renderHistory() {
+  let entries = [];
+  try {
+    entries = await db.getVideosWithRecordings();
+  } catch { /* db not ready */ }
+
+  els.historyList.innerHTML = "";
+  els.historyEmpty.hidden = entries.length > 0;
+
+  for (const e of entries) {
+    const li = document.createElement("li");
+    li.className = "history-item" + (e.videoId === currentVideoId ? " current" : "");
+
+    const load = document.createElement("button");
+    load.className = "history-load";
+    load.title = "Load this video";
+
+    const title = document.createElement("span");
+    title.className = "history-title";
+    title.textContent = e.title || "(untitled video)";
+
+    const meta = document.createElement("span");
+    meta.className = "history-meta";
+    const takes = `${e.count} take${e.count === 1 ? "" : "s"}`;
+    const author = e.author ? `${e.author} · ` : "";
+    meta.innerHTML = `${escapeHtml(author)}<span class="history-id">${escapeHtml(e.videoId)}</span> · ${takes}`;
+
+    load.append(title, meta);
+    load.addEventListener("click", () => {
+      closeHistory();
+      loadVideo(e.videoId);
+    });
+
+    const link = document.createElement("a");
+    link.className = "history-link";
+    link.href = `https://youtu.be/${e.videoId}`;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.title = "Open on YouTube";
+    link.textContent = "↗";
+
+    const del = mkIconBtn("🗑", "Remove from history (deletes its takes)", async () => {
+      const label = e.title || e.videoId;
+      if (!confirm(`Remove "${label}" from history?\nThis permanently deletes its ${e.count} recorded take${e.count === 1 ? "" : "s"}.`)) return;
+      await db.deleteVideo(e.videoId);
+      // If we deleted the video currently loaded, clear its in-memory tracks too.
+      if (e.videoId === currentVideoId) {
+        engine.clear();
+        tracks = [];
+        renderTracks();
+      }
+      await renderHistory();
+      toast("Removed from history.");
+    });
+    del.classList.add("danger", "history-del");
+
+    li.append(load, link, del);
+    els.historyList.append(li);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+function openHistory() {
+  els.historyPanel.hidden = false;
+  els.historyBtn.setAttribute("aria-expanded", "true");
+  renderHistory();
+}
+function closeHistory() {
+  els.historyPanel.hidden = true;
+  els.historyBtn.setAttribute("aria-expanded", "false");
+}
+
+els.historyBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  if (els.historyPanel.hidden) openHistory();
+  else closeHistory();
+});
+// Close when clicking outside the dropdown.
+document.addEventListener("click", (e) => {
+  if (els.historyPanel.hidden) return;
+  if (!els.historyPanel.contains(e.target) && e.target !== els.historyBtn) closeHistory();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeHistory();
 });
 
 // ---------- PWA: install prompt + service worker ----------
@@ -590,6 +726,7 @@ initTheme();
 initOffset();
 showRecordingSupport();
 loadInitialVideo();
+renderHistory();
 window.addEventListener("resize", () => redrawWaveforms());
 
 function showRecordingSupport() {

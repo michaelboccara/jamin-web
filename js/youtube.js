@@ -106,6 +106,8 @@ export class Player {
   getCurrentTime() { return this.yt ? this.yt.getCurrentTime() : 0; }
   getDuration() { return this.yt ? this.yt.getDuration() : 0; }
   getState() { return this.yt ? this.yt.getPlayerState() : -1; }
+  // { video_id, title, author } — populated once the video metadata loads.
+  getVideoData() { return this.yt && this.yt.getVideoData ? this.yt.getVideoData() : null; }
 }
 
 // Re-export the player-state enum values we care about (avoids depending on

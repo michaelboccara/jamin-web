@@ -19,6 +19,14 @@
       <span class="tag">sing over YouTube</span>
     </div>
     <div class="topbar-actions">
+      <div class="history-wrap">
+        <button id="historyBtn" class="btn ghost" title="Videos you've recorded over" aria-haspopup="true" aria-expanded="false">🕑 History ▾</button>
+        <div id="historyPanel" class="history-panel" hidden>
+          <div class="history-head">Recorded videos</div>
+          <ul id="historyList" class="history-list"></ul>
+          <p id="historyEmpty" class="history-empty">No recordings yet. Record a take and the video shows up here.</p>
+        </div>
+      </div>
       <button id="installBtn" class="btn ghost" hidden title="Install app">Install</button>
       <button id="themeBtn" class="btn ghost" title="Toggle dark / light">🌙</button>
     </div>

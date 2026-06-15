@@ -17,11 +17,20 @@
 //     createdAt:   number  — epoch ms,
 //     blob:        Blob     — the recorded audio
 //   }
+//
+// A "video" record (play-history metadata) looks like:
+//   {
+//     videoId:   string  — YouTube video ID (primary key),
+//     title:     string  — video title (best-effort, may be empty),
+//     author:    string  — channel / uploader name (best-effort),
+//     updatedAt: number  — epoch ms of the last time we saw this video
+//   }
 // ============================================================
 
 const DB_NAME = "jamin-db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE = "tracks";
+const VIDEO_STORE = "videos";
 
 let dbPromise = null;
 
@@ -36,6 +45,10 @@ function open() {
         // Index by videoId so we can load all tracks for a given video quickly.
         store.createIndex("videoId", "videoId", { unique: false });
       }
+      // v2: per-video metadata (title/author) for the play-history dropdown.
+      if (!db.objectStoreNames.contains(VIDEO_STORE)) {
+        db.createObjectStore(VIDEO_STORE, { keyPath: "videoId" });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -45,6 +58,10 @@ function open() {
 
 function tx(mode) {
   return open().then((db) => db.transaction(STORE, mode).objectStore(STORE));
+}
+
+function videoTx(mode) {
+  return open().then((db) => db.transaction(VIDEO_STORE, mode).objectStore(VIDEO_STORE));
 }
 
 export async function addTrack(track) {
@@ -101,4 +118,89 @@ export async function getTrack(id) {
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
+}
+
+// ---------- Video metadata (play history) ----------
+
+export async function putVideoMeta(meta) {
+  const store = await videoTx("readwrite");
+  return new Promise((resolve, reject) => {
+    const req = store.put(meta);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+export async function getVideoMeta(videoId) {
+  const store = await videoTx("readonly");
+  return new Promise((resolve, reject) => {
+    const req = store.get(videoId);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// Returns the play history: one entry per video that has at least one
+// recording, joined with its stored title/author. Sorted by the most
+// recent take first.
+//   [{ videoId, count, latest, title, author }]
+export async function getVideosWithRecordings() {
+  const store = await tx("readonly");
+  const byVideo = await new Promise((resolve, reject) => {
+    const map = new Map(); // videoId -> { count, latest }
+    const req = store.openCursor();
+    req.onsuccess = () => {
+      const cur = req.result;
+      if (cur) {
+        const v = cur.value;
+        const e = map.get(v.videoId) || { count: 0, latest: 0 };
+        e.count += 1;
+        e.latest = Math.max(e.latest, v.createdAt || 0);
+        map.set(v.videoId, e);
+        cur.continue();
+      } else {
+        resolve(map);
+      }
+    };
+    req.onerror = () => reject(req.error);
+  });
+
+  const out = [];
+  for (const [videoId, info] of byVideo) {
+    const meta = await getVideoMeta(videoId);
+    out.push({
+      videoId,
+      count: info.count,
+      latest: info.latest,
+      title: (meta && meta.title) || "",
+      author: (meta && meta.author) || "",
+    });
+  }
+  out.sort((a, b) => b.latest - a.latest);
+  return out;
+}
+
+// Remove a video from the play history: deletes ALL its recordings and its
+// stored metadata. Returns the number of tracks removed.
+export async function deleteVideo(videoId) {
+  const store = await tx("readwrite");
+  const removed = await new Promise((resolve, reject) => {
+    let n = 0;
+    const idx = store.index("videoId");
+    const req = idx.openCursor(IDBKeyRange.only(videoId));
+    req.onsuccess = () => {
+      const cur = req.result;
+      if (cur) { cur.delete(); n += 1; cur.continue(); }
+      else resolve(n);
+    };
+    req.onerror = () => reject(req.error);
+  });
+
+  const vstore = await videoTx("readwrite");
+  await new Promise((resolve, reject) => {
+    const req = vstore.delete(videoId);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
+  return removed;
 }
