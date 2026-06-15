@@ -7,6 +7,8 @@
 //     videoId:     string  — YouTube video ID this take belongs to,
 //     name:        string  — user-editable label,
 //     startTime:   number  — video currentTime (seconds) when recording started,
+//     offset:      number  — per-take sync nudge (seconds), on top of the
+//                            device-wide latency offset; + plays the take earlier,
 //     duration:    number  — length of the audio clip (seconds),
 //     mimeType:    string  — e.g. "audio/webm;codecs=opus",
 //     volume:      number  — 0..1 mix gain,

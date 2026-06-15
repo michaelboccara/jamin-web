@@ -23,8 +23,9 @@ Any static server works (`npx serve`, etc.). Do **not** open `index.html` direct
 2. Press **● Record** — the video plays and your mic is captured. The take's start is anchored to the video's `currentTime`.
 3. Press **■ Stop take** to save. Saved takes appear in the **Tracks** list (waveform preview, rename, per-track volume/mute, preview, delete).
 4. Press **▶︎ Play** — all takes for the video are mixed back in sync with the video.
-5. **Earphones mode** (checkbox): while recording, existing takes are monitored so you can overdub. Use headphones so they don't bleed into the new take.
-6. **Export/Import**: save all takes for a video as a `.zip` (audio blobs + `metadata.json`) and re-import later.
+5. **Sync offset** (slider): a take is always recorded slightly *late* because of headphone output + mic input latency (Bluetooth especially). Slide **right** if your voice plays late on replay, **left** if early. It's saved per device, and each take also has a `−/+` nudge for fine fixes.
+6. **Earphones mode** (checkbox): while recording, existing takes are monitored so you can overdub. Use headphones so they don't bleed into the new take.
+7. **Export/Import**: save all takes for a video as a `.zip` (audio blobs + `metadata.json`) and re-import later.
 
 ## Architecture
 
@@ -49,7 +50,12 @@ relative to it. A 4×/sec watchdog compares expected vs. actual video time:
 - error > ~0.6 s → treated as a **seek**: stop, re-anchor, reschedule.
 - error > ~0.18 s → gentle **re-anchor** without retriggering audible clips.
 
-See the long comment block at the top of `js/playback.js`.
+**Latency compensation:** independent of drift, every take is recorded *late*
+by the capture round-trip (the audio the singer heard in their headphones is
+behind the video, and the mic adds more delay). The browser/YouTube stack
+doesn't expose this latency, so it can't be computed — the engine subtracts a
+user-tuned **sync offset** (global default + per-take nudge) from each clip's
+start time. See the long comment block at the top of `js/playback.js`.
 
 ## Future phases (stubbed / noted)
 

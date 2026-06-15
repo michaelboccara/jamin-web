@@ -164,6 +164,19 @@ h1, h2 { margin: 0; font-weight: 650; }
 }
 .monitor-toggle input { margin-top: 2px; }
 
+/* ---------- Sync offset ---------- */
+.offset-row { display: flex; align-items: center; gap: 10px; }
+.offset-label { color: var(--fg-dim); font-size: 13px; white-space: nowrap; }
+.offset-row input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.offset-readout {
+  color: var(--fg);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  min-width: 64px;
+  text-align: right;
+}
+.offset-hint { margin: -8px 0 0; color: var(--fg-dim); font-size: 12px; line-height: 1.4; }
+
 /* ---------- Buttons ---------- */
 .btn {
   background: var(--bg-3);
@@ -247,6 +260,16 @@ h1, h2 { margin: 0; font-weight: 650; }
 .icon-btn.active { background: var(--accent); color: #fff; border-color: transparent; }
 .icon-btn.danger:hover { background: var(--danger); border-color: transparent; color: #fff; }
 .vol { flex: 1; accent-color: var(--accent); }
+
+.track-sync { display: flex; align-items: center; gap: 6px; }
+.track-sync .icon-btn { width: 28px; height: 28px; font-size: 16px; }
+.track-sync-label {
+  color: var(--fg-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  min-width: 84px;
+  text-align: center;
+}
 
 /* ---------- Toast ---------- */
 .toast {

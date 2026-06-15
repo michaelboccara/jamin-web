@@ -65,6 +65,19 @@
         <input type="checkbox" id="monitorChk" />
         <span>Earphones mode &mdash; hear prior takes while recording (headphones only; disabled when raw mic is on)</span>
       </label>
+
+      <div class="offset-row" title="Compensates for recording latency. Slide right if your voice plays late, left if early.">
+        <label for="offsetRange" class="offset-label">Sync offset</label>
+        <input
+          type="range"
+          id="offsetRange"
+          min="-0.3" max="0.8" step="0.005" value="0.2"
+          aria-label="Latency sync offset in seconds"
+        />
+        <span id="offsetReadout" class="offset-readout">+200 ms</span>
+        <button id="offsetReset" class="btn ghost small" type="button" title="Reset to default">Reset</button>
+      </div>
+      <p class="offset-hint">Your voice was recorded a little late (headphone + mic latency). Slide <strong>right</strong> if takes still play late, <strong>left</strong> if early. Bluetooth needs more.</p>
     </section>
 
     <!-- ===== Side: recordings ===== -->

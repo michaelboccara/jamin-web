@@ -16,6 +16,9 @@ const DEFAULT_VIDEO = "HY4lQ7vH4K4";
 const BLOCKED_VIDEO_IDS = new Set(["B3O1OlTWXSA", "HY4lQ7vH4K4", "PD6ippYQ434"]);
 const LAST_VIDEO_KEY = "jamin:lastVideo";
 const THEME_KEY = "jamin:theme";
+const OFFSET_KEY = "jamin:latencyOffset";
+// Sensible starting point for wired output; Bluetooth needs more. Users tune it.
+const DEFAULT_OFFSET = 0.2; // seconds
 
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
@@ -24,6 +27,7 @@ const els = {
   playBtn: $("playBtn"), recBtn: $("recBtn"), stopAllBtn: $("stopAllBtn"),
   timeReadout: $("timeReadout"), recIndicator: $("recIndicator"), recTimer: $("recTimer"),
   monitorChk: $("monitorChk"), rawMicChk: $("rawMicChk"),
+  offsetRange: $("offsetRange"), offsetReadout: $("offsetReadout"), offsetReset: $("offsetReset"),
   trackList: $("trackList"), emptyHint: $("emptyHint"),
   exportBtn: $("exportBtn"), importBtn: $("importBtn"), importFile: $("importFile"),
   themeBtn: $("themeBtn"), installBtn: $("installBtn"),
@@ -42,6 +46,7 @@ let isRecording = false;
 let recStartVideoTime = 0; // video currentTime when recording began
 let recStartedAt = 0;      // epoch ms, for the on-screen rec timer
 let uiTimer = null;
+let latencyOffset = DEFAULT_OFFSET; // seconds — device-wide sync compensation
 
 // ---------- Toast helper ----------
 let toastTimer = null;
@@ -73,6 +78,41 @@ els.themeBtn.addEventListener("click", () => {
   localStorage.setItem(THEME_KEY, next);
   redrawWaveforms();
 });
+
+// ---------- Latency / sync offset ----------
+// A take is recorded late by the capture round-trip (headphone output latency +
+// mic input latency + record-start delay). This offset pulls every take earlier
+// to compensate. It's device-specific and can't be auto-detected reliably, so
+// the user tunes it once; we persist it and feed it to the playback engine.
+function initOffset() {
+  const saved = parseFloat(localStorage.getItem(OFFSET_KEY));
+  latencyOffset = Number.isFinite(saved) ? saved : DEFAULT_OFFSET;
+  if (els.offsetRange) els.offsetRange.value = String(latencyOffset);
+  engine.setGlobalOffset(latencyOffset);
+  renderOffsetReadout();
+}
+
+function renderOffsetReadout() {
+  if (!els.offsetReadout) return;
+  const ms = Math.round(latencyOffset * 1000);
+  els.offsetReadout.textContent = `${ms >= 0 ? "+" : ""}${ms} ms`;
+}
+
+function setOffset(sec, { persist = true } = {}) {
+  latencyOffset = sec;
+  if (els.offsetRange) els.offsetRange.value = String(sec);
+  engine.setGlobalOffset(sec);
+  renderOffsetReadout();
+  if (persist) localStorage.setItem(OFFSET_KEY, String(sec));
+}
+
+els.offsetRange?.addEventListener("input", () => {
+  setOffset(parseFloat(els.offsetRange.value), { persist: false });
+});
+els.offsetRange?.addEventListener("change", () => {
+  setOffset(parseFloat(els.offsetRange.value));
+});
+els.offsetReset?.addEventListener("click", () => setOffset(DEFAULT_OFFSET));
 
 // ---------- Video loading ----------
 function describeYtError(code) {
@@ -199,6 +239,8 @@ async function startRecording() {
   engine.stop();
   if (els.rawMicChk.checked) recorder.resetMic();
 
+  // Open the mic BEFORE anchoring so getUserMedia's (potentially large)
+  // startup cost isn't baked into the take's start time.
   try {
     await recorder.ensureMic();
   } catch (err) {
@@ -206,9 +248,12 @@ async function startRecording() {
     return;
   }
   player.play();
-  await recorder.start();
+  // Anchor as close as possible to actual capture start: read the video clock
+  // immediately before MediaRecorder begins, not after it has spun up. Any
+  // residual capture latency is corrected by the latency-compensation offset.
   recStartVideoTime = player.getCurrentTime();
   recStartedAt = Date.now();
+  await recorder.start();
   isRecording = true;
 
   els.recBtn.textContent = "■ Stop take";
@@ -253,6 +298,7 @@ async function stopRecording() {
     videoId: currentVideoId,
     name: `Take ${tracks.length + 1}`,
     startTime: recStartVideoTime,
+    offset: 0, // per-take sync nudge, on top of the global latency offset
     duration,
     mimeType,
     volume: 1,
@@ -371,7 +417,23 @@ function renderTracks() {
 
     controls.append(playOne, mute, vol, del);
 
-    li.append(row, canvas, controls);
+    // Per-take sync nudge: shift this take earlier (+) or later (−) on top of
+    // the global latency offset. Useful when one take drifts from the rest.
+    const sync = document.createElement("div");
+    sync.className = "track-sync";
+    const syncLabel = document.createElement("span");
+    syncLabel.className = "track-sync-label";
+    syncLabel.title = "Nudge this take's sync (+ = earlier, − = later)";
+    const renderSync = () => {
+      const ms = Math.round((t.offset || 0) * 1000);
+      syncLabel.textContent = `sync ${ms >= 0 ? "+" : ""}${ms} ms`;
+    };
+    const minus = mkIconBtn("−", "Nudge 10 ms later", () => nudgeTrack(t, -0.01, renderSync));
+    const plus = mkIconBtn("+", "Nudge 10 ms earlier", () => nudgeTrack(t, 0.01, renderSync));
+    renderSync();
+    sync.append(minus, syncLabel, plus);
+
+    li.append(row, canvas, controls, sync);
     els.trackList.append(li);
 
     // Draw after layout so clientWidth is known.
@@ -412,6 +474,13 @@ function previewTrack(t, btn) {
   previewAudio.onended = () => { btn.classList.remove("active"); URL.revokeObjectURL(url); };
 }
 
+function nudgeTrack(t, delta, render) {
+  t.offset = Math.round(((t.offset || 0) + delta) * 1000) / 1000;
+  engine.setTrackOffset(t.id, t.offset);
+  if (render) render();
+  db.updateTrack(stripBlobless(t));
+}
+
 function toggleMute(t, btn) {
   t.muted = !t.muted;
   btn.textContent = t.muted ? "🔇" : "🔊";
@@ -441,9 +510,9 @@ els.exportBtn.addEventListener("click", async () => {
     const file = `audio/${i}.${ext}`;
     entries.push({ name: file, data: new Uint8Array(await t.blob.arrayBuffer()) });
     meta.tracks.push({
-      file, name: t.name, startTime: t.startTime, duration: t.duration,
-      mimeType: t.mimeType, volume: t.volume, muted: t.muted, peaks: t.peaks,
-      createdAt: t.createdAt,
+      file, name: t.name, startTime: t.startTime, offset: t.offset ?? 0,
+      duration: t.duration, mimeType: t.mimeType, volume: t.volume,
+      muted: t.muted, peaks: t.peaks, createdAt: t.createdAt,
     });
     i++;
   }
@@ -477,7 +546,8 @@ els.importFile.addEventListener("change", async () => {
       const blob = new Blob([bytes], { type: m.mimeType || "audio/webm" });
       const track = {
         videoId: targetVideo, name: m.name || "Imported take",
-        startTime: m.startTime || 0, duration: m.duration || 0,
+        startTime: m.startTime || 0, offset: m.offset ?? 0,
+        duration: m.duration || 0,
         mimeType: m.mimeType || "audio/webm", volume: m.volume ?? 1,
         muted: !!m.muted, peaks: m.peaks || [], createdAt: m.createdAt || Date.now(),
         blob,
@@ -517,6 +587,7 @@ if ("serviceWorker" in navigator) {
 
 // ---------- Boot ----------
 initTheme();
+initOffset();
 showRecordingSupport();
 loadInitialVideo();
 window.addEventListener("resize", () => redrawWaveforms());
