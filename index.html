@@ -35,18 +35,23 @@
   <main class="layout">
     <!-- ===== Left / top: player + transport ===== -->
     <section class="stage">
-      <form id="urlForm" class="url-row" autocomplete="off">
-        <input
-          id="urlInput"
-          class="url-input"
-          type="text"
-          inputmode="url"
-          placeholder="Paste a YouTube URL or video ID…"
-          aria-label="YouTube URL or video ID"
-        />
-        <button class="btn primary" type="submit">Load</button>
-      </form>
-      <p class="url-hint">Loads the YouTube demo by default. Paste any embeddable karaoke or music video to sing over.</p>
+      <div class="search-wrap">
+        <form id="searchForm" class="url-row" autocomplete="off">
+          <input
+            id="searchInput"
+            class="url-input"
+            type="text"
+            placeholder="Search a song to sing over…"
+            aria-label="Search YouTube"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            aria-controls="searchResults"
+          />
+          <button class="btn primary" type="submit" id="searchBtn">🔎 Search</button>
+        </form>
+        <div id="searchResults" class="search-results" role="listbox" hidden></div>
+      </div>
+      <p class="url-hint">Searches YouTube with <strong>“karaoke”</strong> added automatically. You can also paste a YouTube URL or video ID to load it directly.</p>
 
       <div class="player-wrap">
         <div id="player"></div>

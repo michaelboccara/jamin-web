@@ -8,6 +8,10 @@ import { Recorder, recordingSupportError } from "./recorder.js";
 import { PlaybackEngine } from "./playback.js";
 import { computePeaks, drawWaveform } from "./waveform.js";
 import { buildZip, readZip } from "./zip.js";
+import { searchYouTube, thumbUrl } from "./search.js";
+
+// Appended to every free-text search so results lean toward singable tracks.
+const SEARCH_KEYWORD = "karaoke";
 
 // YouTube's official IFrame API demo — reliably embeds on localhost.
 // const DEFAULT_VIDEO = "M7lc1UVf-VE";
@@ -23,7 +27,8 @@ const DEFAULT_OFFSET = 0.2; // seconds
 // ---------- DOM ----------
 const $ = (id) => document.getElementById(id);
 const els = {
-  urlForm: $("urlForm"), urlInput: $("urlInput"),
+  searchForm: $("searchForm"), searchInput: $("searchInput"),
+  searchBtn: $("searchBtn"), searchResults: $("searchResults"),
   playBtn: $("playBtn"), recBtn: $("recBtn"), stopAllBtn: $("stopAllBtn"),
   timeReadout: $("timeReadout"), recIndicator: $("recIndicator"), recTimer: $("recTimer"),
   monitorChk: $("monitorChk"), rawMicChk: $("rawMicChk"),
@@ -130,7 +135,6 @@ function describeYtError(code) {
 }
 
 async function loadVideo(videoId, { persist = true } = {}) {
-  els.urlInput.value = videoId;
   setOverlay("Loading player…");
 
   try {
@@ -193,11 +197,122 @@ function enableTransport(on) {
   els.recBtn.title = recBlocked || "Record a voice take while the video plays";
 }
 
-els.urlForm.addEventListener("submit", (e) => {
+// ---------- YouTube search ----------
+let searchSeq = 0; // guards against out-of-order responses from slow instances
+
+els.searchForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  const id = parseVideoId(els.urlInput.value);
-  if (!id) { toast("Couldn't find a video ID in that input.", "error"); return; }
-  loadVideo(id);
+  const raw = els.searchInput.value.trim();
+  if (!raw) return;
+
+  // If the user pasted a URL or bare ID, load it directly — skip searching.
+  const directId = parseVideoId(raw);
+  if (directId) {
+    hideSearchResults();
+    loadVideo(directId);
+    return;
+  }
+
+  const seq = ++searchSeq;
+  const query = `${raw} ${SEARCH_KEYWORD}`;
+  showSearchStatus("Searching & checking which videos allow embedding…");
+  els.searchBtn.disabled = true;
+
+  let results;
+  try {
+    results = await searchYouTube(query);
+  } catch (err) {
+    if (seq === searchSeq) showSearchStatus(err.message || "Search failed.");
+    return;
+  } finally {
+    els.searchBtn.disabled = false;
+  }
+
+  if (seq !== searchSeq) return; // a newer search superseded this one
+  renderSearchResults(results);
+});
+
+function showSearchStatus(msg) {
+  els.searchResults.innerHTML = "";
+  const p = document.createElement("p");
+  p.className = "search-status";
+  p.textContent = msg;
+  els.searchResults.append(p);
+  openSearchResults();
+}
+
+function openSearchResults() {
+  els.searchResults.hidden = false;
+  els.searchInput.setAttribute("aria-expanded", "true");
+}
+
+function hideSearchResults() {
+  els.searchResults.hidden = true;
+  els.searchInput.setAttribute("aria-expanded", "false");
+}
+
+function renderSearchResults(results) {
+  els.searchResults.innerHTML = "";
+  if (!results.length) {
+    showSearchStatus("No embeddable results. Try different words or paste a YouTube link.");
+    return;
+  }
+
+  for (const r of results) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "search-item";
+    item.setAttribute("role", "option");
+
+    const thumbWrap = document.createElement("div");
+    thumbWrap.className = "search-thumb-wrap";
+
+    const img = document.createElement("img");
+    img.className = "search-thumb";
+    img.loading = "lazy";
+    img.src = thumbUrl(r.videoId);
+    img.alt = "";
+    thumbWrap.append(img);
+
+    if (r.duration != null) {
+      const dur = document.createElement("span");
+      dur.className = "search-duration";
+      dur.textContent = fmtTime(r.duration);
+      thumbWrap.append(dur);
+    }
+
+    const info = document.createElement("div");
+    info.className = "search-info";
+
+    const title = document.createElement("span");
+    title.className = "search-title";
+    title.textContent = r.title || "(untitled)";
+
+    const author = document.createElement("span");
+    author.className = "search-author";
+    author.textContent = r.author || "";
+
+    info.append(title, author);
+    item.append(thumbWrap, info);
+    item.addEventListener("click", () => {
+      hideSearchResults();
+      loadVideo(r.videoId);
+    });
+
+    els.searchResults.append(item);
+  }
+  openSearchResults();
+}
+
+// Dismiss the results when clicking away or pressing Escape.
+document.addEventListener("click", (e) => {
+  if (els.searchResults.hidden) return;
+  if (!els.searchResults.contains(e.target) && e.target !== els.searchInput) {
+    hideSearchResults();
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") hideSearchResults();
 });
 
 // ---------- Transport ----------
