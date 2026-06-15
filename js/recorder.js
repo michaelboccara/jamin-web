@@ -57,6 +57,43 @@ export class Recorder {
     this.recorder = null;
     this.chunks = [];
     this.mimeType = "";
+    // When true, skip browser echo cancel / noise suppression / auto-gain.
+    this.rawMic = true;
+  }
+
+  setRawMic(raw) {
+    if (this.rawMic === raw) return;
+    this.rawMic = raw;
+    this.releaseMic();
+  }
+
+  // Drop the cached stream so the next open picks up new constraints.
+  resetMic() {
+    this.releaseMic();
+  }
+
+  audioConstraints() {
+    if (this.rawMic) {
+      // exact:false helps on Chromium; goog* flags are legacy but still respected
+      // by Chrome/Edge when the standard keys are ignored.
+      return {
+        audio: {
+          echoCancellation: { exact: false },
+          noiseSuppression: { exact: false },
+          autoGainControl: { exact: false },
+          googEchoCancellation: false,
+          googNoiseSuppression: false,
+          googAutoGainControl: false,
+        },
+      };
+    }
+    return {
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    };
   }
 
   // Lazily request mic permission; throws a friendly error if denied.
@@ -68,13 +105,7 @@ export class Recorder {
 
     const getUserMedia = getUserMediaFn();
     try {
-      this.stream = await getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
+      this.stream = await getUserMedia(this.audioConstraints());
     } catch (err) {
       if (err && (err.name === "NotAllowedError" || err.name === "SecurityError")) {
         throw new Error("Microphone permission was denied. Allow it in the browser address bar, then try again.");

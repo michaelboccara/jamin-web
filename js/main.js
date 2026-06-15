@@ -10,7 +10,8 @@ import { computePeaks, drawWaveform } from "./waveform.js";
 import { buildZip, readZip } from "./zip.js";
 
 // YouTube's official IFrame API demo — reliably embeds on localhost.
-const DEFAULT_VIDEO = "M7lc1UVf-VE";
+// const DEFAULT_VIDEO = "M7lc1UVf-VE";
+const DEFAULT_VIDEO = "HY4lQ7vH4K4";
 // Karaoke IDs often block embedding; skip these if cached from earlier versions.
 const BLOCKED_VIDEO_IDS = new Set(["B3O1OlTWXSA", "HY4lQ7vH4K4", "PD6ippYQ434"]);
 const LAST_VIDEO_KEY = "jamin:lastVideo";
@@ -22,7 +23,7 @@ const els = {
   urlForm: $("urlForm"), urlInput: $("urlInput"),
   playBtn: $("playBtn"), recBtn: $("recBtn"), stopAllBtn: $("stopAllBtn"),
   timeReadout: $("timeReadout"), recIndicator: $("recIndicator"), recTimer: $("recTimer"),
-  monitorChk: $("monitorChk"),
+  monitorChk: $("monitorChk"), rawMicChk: $("rawMicChk"),
   trackList: $("trackList"), emptyHint: $("emptyHint"),
   exportBtn: $("exportBtn"), importBtn: $("importBtn"), importFile: $("importFile"),
   themeBtn: $("themeBtn"), installBtn: $("installBtn"),
@@ -174,17 +175,38 @@ els.recBtn.addEventListener("click", async () => {
   await startRecording();
 });
 
+els.rawMicChk.addEventListener("change", () => {
+  recorder.setRawMic(els.rawMicChk.checked);
+  if (els.rawMicChk.checked && els.monitorChk.checked) {
+    els.monitorChk.checked = false;
+    toast("Earphones mode turned off — it fights raw mic recording via browser echo cancellation.");
+  }
+});
+
+els.monitorChk.addEventListener("change", () => {
+  if (els.monitorChk.checked && els.rawMicChk.checked) {
+    els.monitorChk.checked = false;
+    toast("Uncheck raw mic first, or use headphones with browser processing enabled.");
+  }
+});
+
 async function startRecording() {
+  recorder.setRawMic(els.rawMicChk.checked);
+
+  // Stop prior-track playback before opening the mic. Speaker output from
+  // earphones mode makes the browser's echo-canceller duck/suppress the mic
+  // even when raw-mic constraints are requested.
+  engine.stop();
+  if (els.rawMicChk.checked) recorder.resetMic();
+
   try {
-    await recorder.ensureMic(); // prompts for permission the first time
+    await recorder.ensureMic();
   } catch (err) {
     toast(err.message, "error");
     return;
   }
-  // Begin from the current position; play the video so the user sings along.
   player.play();
   await recorder.start();
-  // Capture the anchor as close to actual capture start as possible.
   recStartVideoTime = player.getCurrentTime();
   recStartedAt = Date.now();
   isRecording = true;
@@ -193,10 +215,10 @@ async function startRecording() {
   els.recBtn.classList.add("is-recording");
   els.recIndicator.hidden = false;
 
-  // Earphones mode: monitor existing tracks while recording. If unchecked,
-  // keep silence so the new take isn't contaminated by prior takes.
-  if (els.monitorChk.checked) engine.start();
-  else engine.stop();
+  // Only monitor prior takes when explicitly enabled AND browser processing is on.
+  // Raw mic + speaker playback = echo cancellation fights your recording.
+  const monitorTakes = els.monitorChk.checked && !els.rawMicChk.checked;
+  if (monitorTakes) engine.start();
 }
 
 async function stopRecording() {
@@ -252,8 +274,13 @@ async function stopRecording() {
 player.onStateChange((state) => {
   if (state === STATE.PLAYING) {
     els.playBtn.textContent = "❚❚ Pause";
-    // Don't monitor old takes during a clean (no-earphones) recording.
-    if (!(isRecording && !els.monitorChk.checked)) engine.start();
+    // While recording with raw mic (default), never play prior takes — speaker
+    // bleed triggers browser echo cancellation that alters the new take.
+    if (isRecording && (els.rawMicChk.checked || !els.monitorChk.checked)) {
+      engine.stop();
+    } else {
+      engine.start();
+    }
     startUiLoop();
   } else if (state === STATE.PAUSED) {
     els.playBtn.textContent = "▶︎ Play";

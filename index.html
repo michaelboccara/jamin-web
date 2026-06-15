@@ -58,8 +58,12 @@
       </div>
 
       <label class="monitor-toggle">
-        <input type="checkbox" id="monitorChk" checked />
-        <span>Earphones mode &mdash; play existing tracks while recording (use headphones to avoid bleed)</span>
+        <input type="checkbox" id="rawMicChk" checked />
+        <span>Raw mic &mdash; no browser noise suppression (recommended; keep earphones mode off unless using headphones)</span>
+      </label>
+      <label class="monitor-toggle">
+        <input type="checkbox" id="monitorChk" />
+        <span>Earphones mode &mdash; hear prior takes while recording (headphones only; disabled when raw mic is on)</span>
       </label>
     </section>
 
