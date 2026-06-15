@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1117" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+  <title>Jam-in! &mdash; sing over YouTube</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="icons/icon.svg" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">🎤</span>
+      <h1>Jam-in!</h1>
+      <span class="tag">sing over YouTube</span>
+    </div>
+    <div class="topbar-actions">
+      <button id="installBtn" class="btn ghost" hidden title="Install app">Install</button>
+      <button id="themeBtn" class="btn ghost" title="Toggle dark / light">🌙</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <!-- ===== Left / top: player + transport ===== -->
+    <section class="stage">
+      <form id="urlForm" class="url-row" autocomplete="off">
+        <input
+          id="urlInput"
+          class="url-input"
+          type="text"
+          inputmode="url"
+          placeholder="Paste a YouTube URL or video ID…"
+          aria-label="YouTube URL or video ID"
+        />
+        <button class="btn primary" type="submit">Load</button>
+      </form>
+      <p class="url-hint">Loads the YouTube demo by default. Paste any embeddable karaoke or music video to sing over.</p>
+
+      <div class="player-wrap">
+        <div id="player"></div>
+        <div id="playerOverlay" class="player-overlay" hidden>
+          <p id="playerOverlayMsg">Loading player…</p>
+        </div>
+      </div>
+
+      <div class="transport">
+        <button id="playBtn" class="btn" disabled>▶︎ Play</button>
+        <button id="recBtn" class="btn record" disabled>● Record</button>
+        <button id="stopAllBtn" class="btn" disabled>■ Stop</button>
+        <div class="transport-meta">
+          <span id="timeReadout" class="readout">0:00</span>
+          <span id="recIndicator" class="rec-indicator" hidden>● REC <span id="recTimer">0:00</span></span>
+        </div>
+      </div>
+
+      <label class="monitor-toggle">
+        <input type="checkbox" id="monitorChk" checked />
+        <span>Earphones mode &mdash; play existing tracks while recording (use headphones to avoid bleed)</span>
+      </label>
+    </section>
+
+    <!-- ===== Side: recordings ===== -->
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <h2>Tracks</h2>
+        <div class="sidebar-actions">
+          <button id="exportBtn" class="btn ghost small" title="Export tracks for this video as a zip">Export</button>
+          <button id="importBtn" class="btn ghost small" title="Import a previously exported zip">Import</button>
+          <input id="importFile" type="file" accept=".zip,application/zip" hidden />
+        </div>
+      </div>
+      <p id="emptyHint" class="empty-hint">No tracks yet. Press <strong>Record</strong> while the video plays to lay down a take.</p>
+      <ul id="trackList" class="track-list"></ul>
+    </aside>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- YouTube IFrame API is loaded on demand from youtube.js -->
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
