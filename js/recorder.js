@@ -159,6 +159,18 @@ export class Recorder {
     return !!this.recorder && this.recorder.state === "recording";
   }
 
+  get isPaused() {
+    return !!this.recorder && this.recorder.state === "paused";
+  }
+
+  pause() {
+    if (this.recorder?.state === "recording") this.recorder.pause();
+  }
+
+  resume() {
+    if (this.recorder?.state === "paused") this.recorder.resume();
+  }
+
   releaseMic() {
     if (this.stream) {
       this.stream.getTracks().forEach((t) => t.stop());

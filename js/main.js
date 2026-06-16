@@ -29,8 +29,8 @@ const $ = (id) => document.getElementById(id);
 const els = {
   searchForm: $("searchForm"), searchInput: $("searchInput"),
   searchBtn: $("searchBtn"), searchResults: $("searchResults"),
-  playBtn: $("playBtn"), recBtn: $("recBtn"), stopAllBtn: $("stopAllBtn"),
-  timeReadout: $("timeReadout"), recIndicator: $("recIndicator"), recTimer: $("recTimer"),
+  recBtn: $("recBtn"),
+  recIndicator: $("recIndicator"), recTimer: $("recTimer"),
   monitorTakesChk: $("monitorTakesChk"), rawMicChk: $("rawMicChk"),
   offsetRange: $("offsetRange"), offsetReadout: $("offsetReadout"), offsetReset: $("offsetReset"),
   trackList: $("trackList"), emptyHint: $("emptyHint"),
@@ -40,6 +40,7 @@ const els = {
   themeBtn: $("themeBtn"), installBtn: $("installBtn"),
   overlay: $("playerOverlay"), overlayMsg: $("playerOverlayMsg"),
   toast: $("toast"),
+  keepTakeModal: $("keepTakeModal"), keepTakeYes: $("keepTakeYes"), keepTakeNo: $("keepTakeNo"),
 };
 
 // ---------- State ----------
@@ -50,8 +51,14 @@ const engine = new PlaybackEngine(() => player.getCurrentTime());
 let currentVideoId = null;
 let tracks = [];           // db records for the current video
 let isRecording = false;
+let isRecordingPaused = false; // recording paused with the video, not finalized
+let keepTakePending = false; // true while the keep/discard modal is open
+let finalizingRecording = false; // guard against re-entrant finalize / seek loops
 let recStartVideoTime = 0; // video currentTime when recording began
-let recStartedAt = 0;      // epoch ms, for the on-screen rec timer
+let recActiveMs = 0;       // wall time spent actively recording (excludes pauses)
+let recSegmentStartedAt = 0; // epoch ms when the current active segment began
+let lastVideoTime = null;  // previous poll position — used to detect seeks
+const SEEK_DETECT_SEC = 0.6; // jump larger than normal playback between polls
 let uiTimer = null;
 let latencyOffset = DEFAULT_OFFSET; // seconds — device-wide sync compensation
 
@@ -191,9 +198,7 @@ function setOverlay(msg) {
 
 function enableTransport(on) {
   const recBlocked = recordingSupportError();
-  els.playBtn.disabled = !on;
   els.recBtn.disabled = !on || !!recBlocked;
-  els.stopAllBtn.disabled = !on;
   els.recBtn.title = recBlocked || "Record a voice take while the video plays";
 }
 
@@ -315,21 +320,9 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") hideSearchResults();
 });
 
-// ---------- Transport ----------
-els.playBtn.addEventListener("click", () => {
-  const st = player.getState();
-  if (st === STATE.PLAYING) player.pause();
-  else player.play();
-});
-
-els.stopAllBtn.addEventListener("click", () => {
-  if (isRecording) stopRecording();
-  player.pause();
-  engine.stop();
-});
-
 els.recBtn.addEventListener("click", async () => {
-  if (isRecording) { await stopRecording(); return; }
+  if (keepTakePending) return;
+  if (isRecording) { await finalizeRecording({ pausePlayer: true }); return; }
   await startRecording();
 });
 
@@ -338,7 +331,8 @@ els.rawMicChk.addEventListener("change", () => {
 });
 
 els.monitorTakesChk.addEventListener("change", () => {
-  if (isRecording && !els.monitorTakesChk.checked) {
+  if (!isRecording) return;
+  if (!els.monitorTakesChk.checked || isRecordingPaused || player.getState() !== STATE.PLAYING) {
     engine.stop();
   } else {
     engine.start();
@@ -346,6 +340,7 @@ els.monitorTakesChk.addEventListener("change", () => {
 });
 
 async function startRecording() {
+  if (keepTakePending) return;
   recorder.setRawMic(els.rawMicChk.checked);
 
   // Stop prior-track playback before opening the mic. Speaker output from
@@ -367,13 +362,18 @@ async function startRecording() {
   // immediately before MediaRecorder begins, not after it has spun up. Any
   // residual capture latency is corrected by the latency-compensation offset.
   recStartVideoTime = player.getCurrentTime();
-  recStartedAt = Date.now();
+  recActiveMs = 0;
+  recSegmentStartedAt = Date.now();
+  lastVideoTime = recStartVideoTime;
+  isRecordingPaused = false;
   await recorder.start();
   isRecording = true;
 
   els.recBtn.textContent = "■ Stop take";
   els.recBtn.classList.add("is-recording");
   els.recIndicator.hidden = false;
+  els.recIndicator.innerHTML = `● REC <span id="recTimer">0:00</span>`;
+  els.recTimer = $("recTimer");
 
   // Only monitor prior takes when explicitly enabled AND browser processing is on.
   // Raw mic + speaker playback = echo cancellation fights your recording.
@@ -384,23 +384,62 @@ async function startRecording() {
     engine.stop();
 }
 
-async function stopRecording() {
-  if (!isRecording) return;
+async function pauseRecordingSession() {
+  if (!isRecording || isRecordingPaused) return;
+  markRecSegmentEnd();
+  recorder.pause();
+  isRecordingPaused = true;
+  els.recIndicator.textContent = "⏸ Paused";
+}
+
+function resumeRecordingSession() {
+  if (!isRecording || !isRecordingPaused) return;
+  recorder.resume();
+  isRecordingPaused = false;
+  recSegmentStartedAt = Date.now();
+  els.recIndicator.innerHTML = `● REC <span id="recTimer">${fmtTime(recElapsedSec())}</span>`;
+  els.recTimer = $("recTimer");
+}
+
+function markRecSegmentEnd() {
+  if (recSegmentStartedAt) {
+    recActiveMs += Date.now() - recSegmentStartedAt;
+    recSegmentStartedAt = 0;
+  }
+}
+
+function recElapsedSec() {
+  let ms = recActiveMs;
+  if (recSegmentStartedAt) ms += Date.now() - recSegmentStartedAt;
+  return ms / 1000;
+}
+
+async function finalizeRecording({ pausePlayer = false } = {}) {
+  if (!isRecording || finalizingRecording) return;
+  finalizingRecording = true;
   isRecording = false;
+  isRecordingPaused = false;
   els.recBtn.textContent = "● Record";
   els.recBtn.classList.remove("is-recording");
   els.recIndicator.hidden = true;
+
+  if (pausePlayer) player.pause();
+  engine.stop();
+  stopUiLoop();
+  markRecSegmentEnd();
+  lastVideoTime = null;
 
   let result;
   try {
     result = await recorder.stop();
   } catch {
+    finalizingRecording = false;
     return;
   }
   const { blob, mimeType } = result;
 
   // Decode once to get accurate duration + waveform peaks.
-  let duration = (Date.now() - recStartedAt) / 1000;
+  let duration = recElapsedSec();
   let peaks = [];
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -410,6 +449,13 @@ async function stopRecording() {
     ctx.close();
   } catch {
     /* keep elapsed-time fallback, empty peaks */
+  }
+
+  const keep = await confirmKeepTake();
+  finalizingRecording = false;
+  if (!keep) {
+    toast("Take discarded.");
+    return;
   }
 
   const track = {
@@ -435,11 +481,40 @@ async function stopRecording() {
   toast("Take saved.", "success");
 }
 
+function confirmKeepTake() {
+  return new Promise((resolve) => {
+    keepTakePending = true;
+    els.recBtn.disabled = true;
+    els.keepTakeModal.hidden = false;
+
+    const finish = (keep) => {
+      keepTakePending = false;
+      els.keepTakeModal.hidden = true;
+      enableTransport(!!currentVideoId);
+      els.keepTakeYes.removeEventListener("click", onYes);
+      els.keepTakeNo.removeEventListener("click", onNo);
+      document.removeEventListener("keydown", onKey);
+      resolve(keep);
+    };
+
+    const onYes = () => finish(true);
+    const onNo = () => finish(false);
+    const onKey = (e) => {
+      if (e.key === "Escape") finish(false);
+    };
+
+    els.keepTakeYes.addEventListener("click", onYes);
+    els.keepTakeNo.addEventListener("click", onNo);
+    document.addEventListener("keydown", onKey);
+    els.keepTakeYes.focus();
+  });
+}
+
 // ---------- Player state → engine ----------
 player.onStateChange((state) => {
   if (state === STATE.PLAYING) {
-    els.playBtn.textContent = "❚❚ Pause";
-    // While recording with raw mic (default), never play prior takes — speaker
+    if (isRecording && isRecordingPaused) resumeRecordingSession();
+    // While recording with monitor off, never play prior takes — speaker
     // bleed triggers browser echo cancellation that alters the new take.
     if (isRecording && !els.monitorTakesChk.checked) {
       engine.stop();
@@ -448,14 +523,13 @@ player.onStateChange((state) => {
     }
     startUiLoop();
   } else if (state === STATE.PAUSED) {
-    els.playBtn.textContent = "▶︎ Play";
     engine.stop();
-    if (isRecording) stopRecording();
-    stopUiLoop();
+    if (isRecording && !isRecordingPaused) pauseRecordingSession();
+    if (isRecording) startUiLoop(); // keep polling for seeks while paused
+    else stopUiLoop();
   } else if (state === STATE.ENDED) {
-    els.playBtn.textContent = "▶︎ Play";
     engine.stop();
-    if (isRecording) stopRecording();
+    if (isRecording) finalizeRecording({ pausePlayer: false });
     stopUiLoop();
   } else if (state === STATE.BUFFERING) {
     // Pause audio during buffering; the watchdog re-syncs on resume.
@@ -465,16 +539,33 @@ player.onStateChange((state) => {
 
 function startUiLoop() {
   if (uiTimer) return;
-  uiTimer = setInterval(() => {
-    els.timeReadout.textContent = fmtTime(player.getCurrentTime());
-    if (isRecording) {
-      els.recTimer.textContent = fmtTime((Date.now() - recStartedAt) / 1000);
-    }
-  }, 250);
+  uiTimer = setInterval(tickRecordingUi, 250);
 }
 function stopUiLoop() {
   clearInterval(uiTimer);
   uiTimer = null;
+}
+
+function tickRecordingUi() {
+  if (!isRecording) return;
+
+  const t = player.getCurrentTime();
+  const st = player.getState();
+
+  // Detect seeks: a large jump while recording means the take can't stay synced.
+  if (lastVideoTime != null && st !== STATE.BUFFERING) {
+    const jump = Math.abs(t - lastVideoTime);
+    const threshold = (isRecordingPaused || st === STATE.PAUSED) ? 0.15 : SEEK_DETECT_SEC;
+    if (jump > threshold) {
+      finalizeRecording({ pausePlayer: false });
+      return;
+    }
+  }
+  lastVideoTime = t;
+
+  if (!isRecordingPaused && els.recTimer) {
+    els.recTimer.textContent = fmtTime(recElapsedSec());
+  }
 }
 
 // ---------- Track list rendering ----------

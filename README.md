@@ -22,9 +22,9 @@ Any static server works (`npx serve`, etc.). Do **not** open `index.html` direct
 1. The YouTube IFrame API demo loads by default (always embeds on localhost). Paste any embeddable karaoke or music video URL/ID and hit **Load**.
 2. Press **● Record** — the video plays and your mic is captured. The take's start is anchored to the video's `currentTime`.
 3. Press **■ Stop take** to save. Saved takes appear in the **Tracks** list (waveform preview, rename, per-track volume/mute, preview, delete).
-4. Press **▶︎ Play** — all takes for the video are mixed back in sync with the video.
-5. **Sync offset** (slider): a take is always recorded slightly *late* because of headphone output + mic input latency (Bluetooth especially). Slide **right** if your voice plays late on replay, **left** if early. It's saved per device, and each take also has a `−/+` nudge for fine fixes.
-6. **Earphones mode** (checkbox): while recording, existing takes are monitored so you can overdub. Use headphones so they don't bleed into the new take.
+4. **Sync offset** (slider): a take is always recorded slightly *late* because of headphone output + mic input latency (Bluetooth especially). Slide **right** if your voice plays late on replay, **left** if early. It's saved per device, and each take also has a `−/+` nudge for fine fixes.
+5. **Raw mic** (checkbox): toggle browser noise suppression and echo cancellation (recommended when using headphones).
+6. **Monitor takes** (checkbox): while recording, existing takes are monitored so you can overdub. Use headphones so they don't bleed into the new take.
 7. **Export/Import**: save all takes for a video as a `.zip` (audio blobs + `metadata.json`) and re-import later.
 
 ## Architecture

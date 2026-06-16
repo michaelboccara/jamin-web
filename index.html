@@ -61,11 +61,8 @@
       </div>
 
       <div class="transport">
-        <button id="playBtn" class="btn" disabled>▶︎ Play</button>
         <button id="recBtn" class="btn record" disabled>● Record</button>
-        <button id="stopAllBtn" class="btn" disabled>■ Stop</button>
         <div class="transport-meta">
-          <span id="timeReadout" class="readout">0:00</span>
           <span id="recIndicator" class="rec-indicator" hidden>● REC <span id="recTimer">0:00</span></span>
         </div>
       </div>
@@ -107,6 +104,18 @@
       <ul id="trackList" class="track-list"></ul>
     </aside>
   </main>
+
+  <div id="keepTakeModal" class="modal" hidden>
+    <div class="modal-backdrop" aria-hidden="true"></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="keepTakeTitle">
+      <h2 id="keepTakeTitle">Keep this take?</h2>
+      <p>Recording stopped. Save it as a track?</p>
+      <div class="modal-actions">
+        <button id="keepTakeNo" class="btn ghost" type="button">No</button>
+        <button id="keepTakeYes" class="btn primary" type="button">Yes, keep</button>
+      </div>
+    </div>
+  </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 

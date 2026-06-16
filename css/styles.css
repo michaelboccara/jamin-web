@@ -294,18 +294,28 @@ h1, h2 { margin: 0; font-weight: 650; }
 
 /* ---------- Transport ---------- */
 .transport {
+  position: relative;
   display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  min-height: 56px;
+}
+.transport .btn.record {
+  padding: 14px 32px;
+  font-size: 17px;
+  font-weight: 700;
+  min-width: 168px;
+  border-radius: 999px;
 }
 .transport-meta {
-  margin-left: auto;
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   gap: 12px;
 }
-.readout { font-variant-numeric: tabular-nums; color: var(--fg-dim); font-size: 14px; }
 .rec-indicator {
   color: var(--record);
   font-weight: 700;
@@ -429,6 +439,44 @@ h1, h2 { margin: 0; font-weight: 650; }
   font-variant-numeric: tabular-nums;
   min-width: 84px;
   text-align: center;
+}
+
+/* ---------- Modal ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-dialog {
+  position: relative;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: var(--shadow);
+}
+.modal-dialog h2 { font-size: 18px; margin: 0 0 8px; }
+.modal-dialog p {
+  color: var(--fg-dim);
+  font-size: 14px;
+  margin: 0 0 18px;
+  line-height: 1.5;
+}
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.62);
+}
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 /* ---------- Toast ---------- */
