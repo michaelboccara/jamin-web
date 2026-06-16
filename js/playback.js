@@ -1,7 +1,6 @@
 // ============================================================
 // playback.js — Web Audio engine that keeps recorded voice tracks
 // in sync with the YouTube video.
-//
 // -------------------- SYNC MODEL --------------------
 // The YouTube player and the Web Audio clock (AudioContext.currentTime)
 // are two independent timelines. To sync them we keep a single "anchor"
@@ -49,6 +48,8 @@
 // (fixes "my voice plays late"); negative pushes it later.
 // ============================================================
 
+import { reportWarning } from "./errors.js";
+
 const SEEK_THRESHOLD = 0.6;  // seconds — bigger than this == a jump/seek
 const DRIFT_THRESHOLD = 0.18; // seconds — gentle re-anchor above this
 const TICK_MS = 250;
@@ -79,9 +80,9 @@ export class PlaybackEngine {
     let buffer;
     try {
       buffer = await ctx.decodeAudioData(arrayBuf.slice(0));
-    } catch {
+    } catch (error) {
       // Some opus-in-webm blobs fail decodeAudioData on certain browsers.
-      // Skip rather than break the whole mix.
+      reportWarning("playback.addTrack.decode", track.id, error);
       return null;
     }
     const gainNode = ctx.createGain();

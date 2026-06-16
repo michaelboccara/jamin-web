@@ -1,6 +1,9 @@
 // ============================================================
 // db.js — IndexedDB persistence, keyed by YouTube video ID.
-//
+// ============================================================
+
+import { reportError } from "./errors.js";
+
 // A "track" record looks like:
 //   {
 //     id:          auto-increment number (primary key),
@@ -51,7 +54,10 @@ function open() {
       }
     };
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = () => {
+      reportError("db.open", req.error);
+      reject(req.error);
+    };
   });
   return dbPromise;
 }

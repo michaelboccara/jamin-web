@@ -96,6 +96,8 @@ function normalizeInvidious(data) {
   return out;
 }
 
+import { reportWarning } from "./errors.js";
+
 async function rawSearch(query) {
   const q = encodeURIComponent(query);
 
@@ -104,7 +106,9 @@ async function rawSearch(query) {
       const data = await getJson(`${base}/search?q=${q}&filter=videos`);
       const items = normalizePiped(data);
       if (items.length) return items;
-    } catch { /* try the next instance */ }
+    } catch (error) {
+      reportWarning("search.piped", base, error);
+    }
   }
 
   for (const base of INVIDIOUS_INSTANCES) {
@@ -112,7 +116,9 @@ async function rawSearch(query) {
       const data = await getJson(`${base}/api/v1/search?q=${q}&type=video`);
       const items = normalizeInvidious(data);
       if (items.length) return items;
-    } catch { /* try the next instance */ }
+    } catch (error) {
+      reportWarning("search.invidious", base, error);
+    }
   }
 
   throw new Error("Search providers are unavailable right now. Try again, or paste a YouTube link.");

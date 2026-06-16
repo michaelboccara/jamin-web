@@ -1,0 +1,16 @@
+---
+description: Core architecture and style rules for Voice Sync Dubber
+alwaysApply: true
+---
+
+# Core Rules - Always Follow
+
+- Use vanilla Javascript/HTML5/CSS
+- Keep code simple, readable, and modular. Prefer small focused functions.
+- Use descriptive names. Avoid abbreviations unless obvious.
+- Add clear comments for complex audio sync / Web Audio / YouTube IFrame logic.
+- Error handling: Graceful degradation, meaningful console messages, user-friendly alerts.
+- State management: Keep it lightweight (no heavy frameworks unless necessary).
+- Performance: Be mindful of audio memory usage and sync drift.
+- Style: Consistent formatting, clean imports, no unused code.
+- Architecture: Separate concerns — UI, audio recording, sync engine, storage.

@@ -2,9 +2,11 @@
 // recorder.js — voice capture via MediaRecorder.
 //
 // Picks the best available webm/opus mime type and reuses the mic stream
-// across takes. The caller is responsible for tagging the resulting blob
-// with the video timestamp at which recording started.
+// across takes. The caller tags the blob with the video timestamp at which
+// recording started.
 // ============================================================
+
+import { reportError } from "./errors.js";
 
 const PREFERRED_TYPES = [
   "audio/webm;codecs=opus",
@@ -116,6 +118,7 @@ export class Recorder {
       if (err && err.name === "NotReadableError") {
         throw new Error("Microphone is in use by another app. Close it and try again.");
       }
+      reportError("recorder.ensureMic", err);
       throw err;
     }
     return this.stream;

@@ -29,18 +29,27 @@ Any static server works (`npx serve`, etc.). Do **not** open `index.html` direct
 
 ## Architecture
 
-| File | Responsibility |
+| Module | Responsibility |
 | --- | --- |
-| `index.html` / `css/styles.css` | App shell + minimal, dark-mode-first, mobile-friendly UI |
-| `js/main.js` | Wires UI ↔ player ↔ recorder ↔ db ↔ playback engine |
-| `js/youtube.js` | Loads the IFrame API, parses URLs, wraps the player |
-| `js/recorder.js` | `MediaRecorder` voice capture (webm/opus) |
-| `js/playback.js` | Web Audio engine that keeps takes synced to the video |
-| `js/db.js` | IndexedDB persistence, keyed by YouTube video ID |
-| `js/waveform.js` | Downsampled peaks + canvas preview |
-| `js/zip.js` | Dependency-free STORE-method zip writer/reader |
-| `sw.js` / `manifest.webmanifest` | PWA: offline app shell + installability |
-
+| `index.html` / `css/styles.css` | App shell + minimal, dark-mode-first UI |
+| `js/main.js` | Thin bootstrap — wires modules together |
+| `js/ui.js` | Toast, theme, overlay, formatting helpers |
+| `js/video.js` | YouTube video loading + metadata capture |
+| `js/search-ui.js` | Search form and results UI |
+| `js/search.js` | YouTube search via public Piped/Invidious APIs |
+| `js/recording.js` | Recording session lifecycle |
+| `js/tracks-ui.js` | Track list rendering and per-take controls |
+| `js/history-ui.js` | Play-history dropdown |
+| `js/export-import.js` | Zip export/import |
+| `js/latency.js` | Device-wide sync offset slider |
+| `js/youtube.js` | IFrame API loader, URL parsing, player wrapper |
+| `js/recorder.js` | `MediaRecorder` voice capture |
+| `js/playback.js` | Web Audio sync engine + drift handling |
+| `js/db.js` | IndexedDB persistence |
+| `js/errors.js` | Central `console` logging + user toasts |
+| `js/constants.js` | App-wide constants and storage keys |
+| `js/waveform.js` / `js/zip.js` | Waveform previews, zip I/O |
+| `sw.js` / `manifest.webmanifest` | PWA offline shell + installability |
 ### Sync model & drift handling
 
 The video clock and the Web Audio clock are independent. The engine keeps one
