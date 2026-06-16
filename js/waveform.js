@@ -44,3 +44,37 @@ export function drawWaveform(canvas, peaks, color) {
     ctx.fillRect(x, mid - h / 2, Math.max(1, barW - 1), h);
   }
 }
+
+// Draw peaks inside a segment of a full-width timeline canvas (0..1 fractions).
+export function drawTimelineWaveform(canvas, peaks, { segmentLeft = 0, segmentWidth = 1, color } = {}) {
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = canvas.clientWidth || 300;
+  const cssH = canvas.clientHeight || 40;
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, cssW, cssH);
+
+  if (!peaks || !peaks.length || segmentWidth <= 0) return;
+
+  const left = Math.max(0, segmentLeft) * cssW;
+  const right = Math.min(1, segmentLeft + segmentWidth) * cssW;
+  const segW = Math.max(2, right - left);
+  if (segW <= 0) return;
+
+  const mid = cssH / 2;
+  const barW = segW / peaks.length;
+  ctx.fillStyle = color || "#6c8cff";
+  for (let i = 0; i < peaks.length; i++) {
+    const h = Math.max(1, peaks[i] * (cssH - 4));
+    const x = left + i * barW;
+    ctx.fillRect(x, mid - h / 2, Math.max(1, barW - 0.5), h);
+  }
+
+  ctx.strokeStyle = color || "#6c8cff";
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.55;
+  ctx.strokeRect(left + 0.5, 1.5, Math.max(1, segW - 1), cssH - 3);
+  ctx.globalAlpha = 1;
+}

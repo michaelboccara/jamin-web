@@ -51,21 +51,40 @@
         </form>
         <div id="searchResults" class="search-results" role="listbox" hidden></div>
       </div>
-      <p class="url-hint">Searches YouTube with <strong>“karaoke”</strong> added automatically. You can also paste a YouTube URL or video ID to load it directly.</p>
 
       <div class="player-wrap">
         <div id="player"></div>
         <div id="playerOverlay" class="player-overlay" hidden>
           <p id="playerOverlayMsg">Loading player…</p>
         </div>
-      </div>
-
-      <div class="transport">
-        <button id="recBtn" class="btn record" disabled>● Record</button>
-        <div class="transport-meta">
-          <span id="recIndicator" class="rec-indicator" hidden>● REC <span id="recTimer">0:00</span></span>
+        <div class="player-controls">
+          <div class="player-rec-row">
+            <button id="recBtn" class="btn record" disabled>● Record</button>
+            <span id="recIndicator" class="rec-indicator" hidden aria-live="polite">● REC <span id="recTimer">0:00</span></span>
+          </div>
         </div>
       </div>
+
+      <div id="timelinePanel" class="timeline-panel" hidden>
+        <div class="timeline-ruler">
+          <span id="timelineRulerStart" class="timeline-ruler-label">0:00</span>
+          <div
+            class="global-sync-row rec-offset-row"
+            title="Compensates for recording latency. ◀ if your voice plays late, ▶ if early."
+          >
+            <span class="global-sync-label">Global sync offset</span>
+            <div class="timeline-sync">
+              <button id="offsetEarlier" class="icon-btn" type="button" title="10 ms earlier">◀</button>
+              <span id="offsetReadout" class="track-sync-ms" title="Double-click to reset to default">+200 ms</span>
+              <button id="offsetLater" class="icon-btn" type="button" title="10 ms later">▶</button>
+            </div>
+          </div>
+          <span id="timelineRulerEnd" class="timeline-ruler-label">0:00</span>
+        </div>
+        <div id="trackList" class="timeline-tracks"></div>
+        <div id="playhead" class="timeline-playhead" hidden></div>
+      </div>
+      <p id="emptyHint" class="empty-hint">No tracks yet. Press <strong>Record</strong> while the video plays to lay down a take.</p>
 
       <label class="monitor-toggle">
         <input type="checkbox" id="rawMicChk" checked />
@@ -75,35 +94,20 @@
         <input type="checkbox" id="monitorTakesChk" checked />
         <span>Monitor takes &mdash; hear prior takes while recording</span>
       </label>
-
-      <div class="offset-row" title="Compensates for recording latency. Slide right if your voice plays late, left if early.">
-        <label for="offsetRange" class="offset-label">Sync offset</label>
-        <input
-          type="range"
-          id="offsetRange"
-          min="-0.3" max="0.8" step="0.005" value="0.2"
-          aria-label="Latency sync offset in seconds"
-        />
-        <span id="offsetReadout" class="offset-readout">+200 ms</span>
-        <button id="offsetReset" class="btn ghost small" type="button" title="Reset to default">Reset</button>
-      </div>
-      <p class="offset-hint">Your voice was recorded a little late (headphone + mic latency). Slide <strong>right</strong> if takes still play late, <strong>left</strong> if early. Bluetooth needs more.</p>
     </section>
-
-    <!-- ===== Side: recordings ===== -->
-    <aside class="sidebar">
-      <div class="sidebar-head">
-        <h2>Tracks</h2>
-        <div class="sidebar-actions">
-          <button id="exportBtn" class="btn ghost small" title="Export tracks for this video as a zip">Export</button>
-          <button id="importBtn" class="btn ghost small" title="Import a previously exported zip">Import</button>
-          <input id="importFile" type="file" accept=".zip,application/zip" hidden />
-        </div>
-      </div>
-      <p id="emptyHint" class="empty-hint">No tracks yet. Press <strong>Record</strong> while the video plays to lay down a take.</p>
-      <ul id="trackList" class="track-list"></ul>
-    </aside>
   </main>
+
+  <div id="deleteTakeModal" class="modal" hidden>
+    <div class="modal-backdrop" aria-hidden="true"></div>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteTakeTitle">
+      <h2 id="deleteTakeTitle">Delete this take?</h2>
+      <p id="deleteTakeMsg">This cannot be undone.</p>
+      <div class="modal-actions">
+        <button id="deleteTakeNo" class="btn ghost" type="button">No</button>
+        <button id="deleteTakeYes" class="btn primary" type="button">Yes, delete</button>
+      </div>
+    </div>
+  </div>
 
   <div id="keepTakeModal" class="modal" hidden>
     <div class="modal-backdrop" aria-hidden="true"></div>

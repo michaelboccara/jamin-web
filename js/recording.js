@@ -187,7 +187,7 @@ export async function finalizeRecording(app, { pausePlayer = false } = {}) {
   try {
     track.id = await db.addTrack(track);
     app.tracks.push(track);
-    app.tracks.sort((a, b) => a.startTime - b.startTime);
+    app.tracks.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     await app.engine.addTrack(track);
     app.renderTracks();
     app.renderHistory();

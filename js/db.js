@@ -91,7 +91,7 @@ export async function getTracksByVideo(videoId) {
         out.push(cur.value);
         cur.continue();
       } else {
-        out.sort((a, b) => a.startTime - b.startTime);
+        out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         resolve(out);
       }
     };

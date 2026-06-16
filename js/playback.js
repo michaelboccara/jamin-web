@@ -64,7 +64,8 @@ export class PlaybackEngine {
     this.anchorVideo = 0;
     this.running = false;
     this.timer = null;
-    this.globalOffset = 0; // seconds — device-wide latency compensation
+    this.globalOffset = 0;
+    this.soloId = null;
   }
 
   _ctxReady() {
@@ -93,7 +94,7 @@ export class PlaybackEngine {
       id: track.id,
       buffer,
       startTime: track.startTime,
-      offset: track.offset ?? 0, // per-take latency nudge (seconds)
+      offset: track.offset ?? 0,
       gainNode,
       volume: track.volume ?? 1,
       muted: !!track.muted,
@@ -108,14 +109,27 @@ export class PlaybackEngine {
     const t = this.tracks.find((x) => x.id === id);
     if (!t) return;
     t.volume = volume;
-    if (!t.muted) t.gainNode.gain.value = volume;
+    this._applyGain(t);
   }
 
   setMuted(id, muted) {
     const t = this.tracks.find((x) => x.id === id);
     if (!t) return;
     t.muted = muted;
-    t.gainNode.gain.value = muted ? 0 : t.volume;
+    this._applyGain(t);
+  }
+
+  setSolo(id) {
+    this.soloId = id || null;
+    for (const t of this.tracks) this._applyGain(t);
+  }
+
+  _applyGain(t) {
+    if (t.muted || (this.soloId && this.soloId !== t.id)) {
+      t.gainNode.gain.value = 0;
+      return;
+    }
+    t.gainNode.gain.value = t.volume;
   }
 
   // Device-wide latency compensation (seconds). Reschedules live so the user
@@ -142,11 +156,13 @@ export class PlaybackEngine {
   removeTrack(id) {
     this._stopOne(id);
     this.tracks = this.tracks.filter((t) => t.id !== id);
+    if (this.soloId === id) this.soloId = null;
   }
 
   clear() {
     this.stop();
     this.tracks = [];
+    this.soloId = null;
   }
 
   // (Re)establish the anchor from the current video time.

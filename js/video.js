@@ -5,7 +5,44 @@ import { BLOCKED_VIDEO_IDS, DEFAULT_VIDEO_ID, STORAGE_KEYS } from "./constants.j
 import { reportError, reportWarning } from "./errors.js";
 import { setPlayerOverlay, showToast } from "./ui.js";
 
+import { isVideoMetadataReady } from "./youtube.js";
+
 const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+let timelineSyncTimer = null;
+
+export function initTimelineSync(app) {
+  app._timelineSyncedKey = null;
+
+  app.syncTimelineLayout = () => {
+    const videoId = app.currentVideoId;
+    if (!videoId || !isVideoMetadataReady(app.player, videoId)) return false;
+
+    const duration = app.player.getDuration();
+    const key = `${videoId}:${duration}`;
+    if (app._timelineSyncedKey === key) return true;
+
+    app._timelineSyncedKey = key;
+    app.redrawWaveforms?.();
+    app.refreshPlayhead?.();
+    return true;
+  };
+
+  app.player.onStateChange(() => {
+    app.syncTimelineLayout();
+  });
+}
+
+function scheduleTimelineSync(app, videoId) {
+  if (timelineSyncTimer) clearInterval(timelineSyncTimer);
+  const deadline = Date.now() + 15000;
+  timelineSyncTimer = setInterval(() => {
+    if (app.syncTimelineLayout() || Date.now() >= deadline) {
+      clearInterval(timelineSyncTimer);
+      timelineSyncTimer = null;
+    }
+  }, 100);
+}
 
 export function describeYouTubeError(code) {
   if (code === "101" || code === "150") {
@@ -24,6 +61,7 @@ export async function loadVideo(app, videoId, { persist = true } = {}) {
   setPlayerOverlay(elements, "Loading player…");
 
   try {
+    app._timelineSyncedKey = null;
     await player.load(videoId);
     setPlayerOverlay(elements, null);
     app.currentVideoId = videoId;
@@ -31,9 +69,11 @@ export async function loadVideo(app, videoId, { persist = true } = {}) {
     enableRecordButton(app, true);
 
     engine.clear();
+    app.soloTrackId = null;
     app.tracks = await db.getTracksByVideo(videoId);
     for (const track of app.tracks) await engine.addTrack(track);
     app.renderTracks();
+    if (!app.syncTimelineLayout()) scheduleTimelineSync(app, videoId);
     captureVideoMeta(app, videoId);
     return true;
   } catch (error) {

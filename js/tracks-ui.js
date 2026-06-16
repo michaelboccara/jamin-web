@@ -1,169 +1,361 @@
-// Track list UI: render, preview, mute, sync nudge, delete.
+// Timeline track UI: positioned waveforms, segment bounds, hover controls.
 
 import * as db from "./db.js";
 import { reportError } from "./errors.js";
-import { drawWaveform } from "./waveform.js";
-import { formatTime, getAccentColor, makeIconButton } from "./ui.js";
+import { drawTimelineWaveform } from "./waveform.js";
+import { confirmDeleteTake, formatTime, getAccentColor, makeIconButton } from "./ui.js";
+
+const LONG_PRESS_MS = 450;
+const NUDGE_SEC = 0.01;
+const CONTROLS_GAP_PX = 4;
+
+let activeTrackRow = null;
+let volOpenRow = null;
 
 export function createTrackListController(app) {
-  let previewAudio = null;
+  function getTimelineMetrics() {
+    return {
+      videoDuration: app.player.getDuration() || 0,
+      globalOffset: app.latencyOffset || 0,
+    };
+  }
+
+  function getTrackSegment(track, metrics) {
+    const { videoDuration, globalOffset } = metrics;
+    if (videoDuration <= 0) {
+      return { segmentLeft: 0, segmentWidth: 0 };
+    }
+    const effStart = track.startTime - globalOffset - (track.offset || 0);
+    return {
+      segmentLeft: effStart / videoDuration,
+      segmentWidth: (track.duration || 0) / videoDuration,
+    };
+  }
+
+  function updateRuler() {
+    const { elements } = app;
+    const duration = app.player.getDuration() || 0;
+    if (elements.timelineRulerStart) {
+      elements.timelineRulerStart.textContent = formatTime(0);
+    }
+    if (elements.timelineRulerEnd) {
+      elements.timelineRulerEnd.textContent = formatTime(duration);
+    }
+  }
+
+  function layoutTrackRow(row) {
+    if (!row._segmentEl || !row._controlsEl || !row._getSegment) return;
+    const segment = row._getSegment();
+    const { segmentLeft, segmentWidth } = segment;
+    const rowW = row.clientWidth;
+    if (rowW <= 0) return;
+
+    row._segmentEl.style.left = `${segmentLeft * 100}%`;
+    row._segmentEl.style.width = `${Math.max(0, segmentWidth) * 100}%`;
+
+    const controlsW = row._controlsEl.offsetWidth || 210;
+    const segEnd = segmentLeft + segmentWidth;
+    const spaceRight = (1 - segEnd) * rowW;
+    const spaceLeft = segmentLeft * rowW;
+    const need = controlsW + CONTROLS_GAP_PX;
+
+    row._controlsEl.classList.remove("align-left", "align-right", "align-inside");
+    if (spaceRight >= need || spaceRight >= spaceLeft) {
+      row._controlsEl.classList.add("align-right");
+      row._controlsEl.style.left = `${segEnd * 100}%`;
+    } else if (spaceLeft >= need) {
+      row._controlsEl.classList.add("align-left");
+      row._controlsEl.style.left = `${segmentLeft * 100}%`;
+    } else {
+      row._controlsEl.classList.add("align-inside");
+      const insideLeft = Math.max(0, Math.min(1 - controlsW / rowW, segEnd - controlsW / rowW));
+      row._controlsEl.style.left = `${insideLeft * 100}%`;
+    }
+  }
+
+  function layoutAllTrackRows() {
+    app.elements.trackList.querySelectorAll(".timeline-track").forEach(layoutTrackRow);
+  }
 
   function renderTracks() {
     const { elements, tracks } = app;
     elements.trackList.innerHTML = "";
-    elements.emptyHint.hidden = tracks.length > 0;
+    const hasTracks = tracks.length > 0;
+    elements.emptyHint.hidden = hasTracks;
+    elements.timelinePanel.hidden = !app.currentVideoId;
 
-    for (const track of tracks) {
-      elements.trackList.append(buildTrackElement(app, track, () => previewAudio, (audio) => {
-        previewAudio = audio;
-      }));
+    updateRuler();
+
+    const sorted = [...tracks].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    for (const track of sorted) {
+      elements.trackList.append(buildTrackElement(app, track, getTimelineMetrics, getTrackSegment, layoutTrackRow));
     }
-  }
 
-  function redrawWaveforms() {
-    app.elements.trackList.querySelectorAll("canvas.waveform").forEach((canvas) => {
-      drawWaveform(canvas, canvas._peaks, getAccentColor());
+    requestAnimationFrame(() => {
+      layoutAllTrackRows();
+      app.refreshPlayhead?.();
     });
   }
 
-  return { renderTracks, redrawWaveforms };
+  function redrawWaveforms() {
+    const metrics = getTimelineMetrics();
+    const color = getAccentColor();
+    app.elements.trackList.querySelectorAll("canvas.timeline-wave").forEach((canvas) => {
+      const track = app.tracks.find((t) => t.id === canvas.dataset.trackId);
+      if (!track) return;
+      const segment = getTrackSegment(track, metrics);
+      canvas._segment = segment;
+      drawTimelineWaveform(canvas, canvas._peaks, { ...segment, color });
+    });
+    updateRuler();
+    layoutAllTrackRows();
+    app.refreshPlayhead?.();
+  }
+
+  return { renderTracks, redrawWaveforms, layoutAllTrackRows };
 }
 
-function buildTrackElement(app, track, getPreviewAudio, setPreviewAudio) {
-  const listItem = document.createElement("li");
-  listItem.className = "track";
-
+function buildTrackElement(app, track, getTimelineMetrics, getTrackSegment, layoutTrackRow) {
   const row = document.createElement("div");
-  row.className = "track-row";
-
-  const nameInput = document.createElement("input");
-  nameInput.className = "track-name";
-  nameInput.value = track.name;
-  nameInput.title = "Rename take";
-  nameInput.addEventListener("change", async () => {
-    track.name = nameInput.value.trim() || track.name;
-    nameInput.value = track.name;
-    try {
-      await db.updateTrack(track);
-    } catch (error) {
-      reportError("updateTrack", error, "Could not rename this take.", app.notify);
-    }
-  });
-
-  const timeLabel = document.createElement("span");
-  timeLabel.className = "track-time";
-  timeLabel.textContent =
-    `${formatTime(track.startTime)} · ${track.duration ? track.duration.toFixed(1) : "?"}s`;
-
-  row.append(nameInput, timeLabel);
+  row.className = "timeline-track";
+  row.dataset.trackId = track.id;
 
   const canvas = document.createElement("canvas");
-  canvas.className = "waveform";
+  canvas.className = "timeline-wave";
+  canvas.dataset.trackId = track.id;
   canvas._peaks = track.peaks;
 
+  const segmentEl = document.createElement("div");
+  segmentEl.className = "timeline-segment";
+  segmentEl.setAttribute("aria-hidden", "true");
+
   const controls = document.createElement("div");
-  controls.className = "track-controls";
+  controls.className = "timeline-controls";
 
-  const previewButton = makeIconButton("▶", "Preview this take", () => {
-    previewTrack(track, previewButton, getPreviewAudio, setPreviewAudio);
+  const sync = document.createElement("div");
+  sync.className = "timeline-sync";
+
+  const syncMs = document.createElement("span");
+  syncMs.className = "track-sync-ms";
+  syncMs.title = "Double-click to reset nudge to 0 ms";
+
+  const renderSyncMs = () => {
+    const ms = Math.round((track.offset || 0) * 1000);
+    syncMs.textContent = `${ms >= 0 ? "+" : ""}${ms} ms`;
+  };
+
+  const refreshSegment = () => {
+    const metrics = getTimelineMetrics();
+    const segment = getTrackSegment(track, metrics);
+    canvas._segment = segment;
+    drawTimelineWaveform(canvas, canvas._peaks, { ...segment, color: getAccentColor() });
+    layoutTrackRow(row);
+  };
+
+  const earlierBtn = makeIconButton("◀", "Nudge 10 ms earlier", () => {
+    nudgeTrack(app, track, -NUDGE_SEC, renderSyncMs, refreshSegment);
   });
-  const muteButton = makeIconButton(
+  const laterBtn = makeIconButton("▶", "Nudge 10 ms later", () => {
+    nudgeTrack(app, track, NUDGE_SEC, renderSyncMs, refreshSegment);
+  });
+  renderSyncMs();
+  sync.append(earlierBtn, syncMs, laterBtn);
+
+  syncMs.addEventListener("dblclick", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    resetTrackOffset(app, track, renderSyncMs, refreshSegment);
+  });
+
+  const volWrap = document.createElement("div");
+  volWrap.className = "timeline-vol";
+
+  const volBtn = makeIconButton(
     track.muted ? "🔇" : "🔊",
-    "Mute in mix",
-    () => toggleMute(app, track, muteButton)
+    "Click to mute; hold for volume",
+    () => {}
   );
-  if (track.muted) muteButton.classList.add("active");
+  if (track.muted) volBtn.classList.add("muted");
 
-  const volumeSlider = document.createElement("input");
-  volumeSlider.type = "range";
-  volumeSlider.className = "vol";
-  volumeSlider.min = "0";
-  volumeSlider.max = "1";
-  volumeSlider.step = "0.01";
-  volumeSlider.value = String(track.volume ?? 1);
-  volumeSlider.title = "Volume in mix";
-  volumeSlider.addEventListener("input", () => {
-    track.volume = parseFloat(volumeSlider.value);
-    app.engine.setVolume(track.id, track.volume);
+  const volPopover = document.createElement("div");
+  volPopover.className = "vol-popover";
+  const volSlider = document.createElement("input");
+  volSlider.type = "range";
+  volSlider.min = "0";
+  volSlider.max = "1";
+  volSlider.step = "0.01";
+  volSlider.value = String(track.volume ?? 1);
+  volSlider.title = "Volume in mix";
+  volSlider.setAttribute("aria-label", "Track volume");
+  volSlider.addEventListener("input", () => {
+    track.volume = parseFloat(volSlider.value);
+    if (!track.muted) app.engine.setVolume(track.id, track.volume);
   });
-  volumeSlider.addEventListener("change", async () => {
-    try {
-      await db.updateTrack(track);
-    } catch (error) {
+  volSlider.addEventListener("change", () => {
+    db.updateTrack(track).catch((error) => {
       reportError("updateTrack", error, null, app.notify);
-    }
+    });
   });
+  volPopover.append(volSlider);
+  volWrap.append(volBtn, volPopover);
+  wireVolumeButton(app, track, row, volBtn);
 
-  const deleteButton = makeIconButton("🗑", "Delete take", () => deleteTrack(app, track));
-  deleteButton.classList.add("danger");
-
-  controls.append(previewButton, muteButton, volumeSlider, deleteButton);
-
-  const syncRow = document.createElement("div");
-  syncRow.className = "track-sync";
-  const syncLabel = document.createElement("span");
-  syncLabel.className = "track-sync-label";
-  syncLabel.title = "Nudge this take's sync (+ = earlier, − = later)";
-
-  const renderSyncLabel = () => {
-    const milliseconds = Math.round((track.offset || 0) * 1000);
-    syncLabel.textContent = `sync ${milliseconds >= 0 ? "+" : ""}${milliseconds} ms`;
-  };
-
-  const minusButton = makeIconButton("−", "Nudge 10 ms later", () => {
-    nudgeTrack(app, track, -0.01, renderSyncLabel);
+  const soloWrap = document.createElement("div");
+  soloWrap.className = "timeline-solo";
+  const soloBtn = makeIconButton("S", "Solo — hear only this take", () => {
+    toggleSolo(app, track);
   });
-  const plusButton = makeIconButton("+", "Nudge 10 ms earlier", () => {
-    nudgeTrack(app, track, 0.01, renderSyncLabel);
-  });
-  renderSyncLabel();
-  syncRow.append(minusButton, syncLabel, plusButton);
+  if (app.soloTrackId === track.id) soloBtn.classList.add("active");
+  soloWrap.append(soloBtn);
 
-  listItem.append(row, canvas, controls, syncRow);
-  requestAnimationFrame(() => drawWaveform(canvas, track.peaks, getAccentColor()));
-  return listItem;
+  const delWrap = document.createElement("div");
+  delWrap.className = "timeline-del";
+  const deleteBtn = makeIconButton("🗑", "Delete take", () => {
+    deleteTrack(app, track);
+  });
+  deleteBtn.classList.add("danger");
+  delWrap.append(deleteBtn);
+
+  controls.append(sync, volWrap, soloWrap, delWrap);
+  controls.addEventListener("click", (event) => event.stopPropagation());
+
+  row._segmentEl = segmentEl;
+  row._controlsEl = controls;
+  row._getSegment = () => getTrackSegment(track, getTimelineMetrics());
+
+  row.append(canvas, segmentEl, controls);
+  wireRowActivation(row, controls, () => layoutTrackRow(row));
+
+  requestAnimationFrame(refreshSegment);
+
+  return row;
 }
 
-function previewTrack(track, button, getPreviewAudio, setPreviewAudio) {
-  const current = getPreviewAudio();
-  if (current) {
-    current.pause();
-    setPreviewAudio(null);
+function wireRowActivation(row, controls, onActivate) {
+  row.addEventListener("pointerdown", (event) => {
+    if (controls.contains(event.target)) return;
+    setActiveTrackRow(row);
+    onActivate?.();
+  });
+
+  controls.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+    setActiveTrackRow(row);
+    onActivate?.();
+  });
+
+  row.addEventListener("mouseenter", () => onActivate?.());
+}
+
+function setActiveTrackRow(row) {
+  if (activeTrackRow && activeTrackRow !== row) {
+    activeTrackRow.classList.remove("is-active");
   }
-  const url = URL.createObjectURL(track.blob);
-  const audio = new Audio(url);
-  setPreviewAudio(audio);
-  audio.play();
-  button.classList.add("active");
-  audio.onended = () => {
-    button.classList.remove("active");
-    URL.revokeObjectURL(url);
-    setPreviewAudio(null);
-  };
+  activeTrackRow = row;
+  row.classList.add("is-active");
 }
 
-function nudgeTrack(app, track, deltaSeconds, renderSyncLabel) {
+function closeVolPopover() {
+  if (volOpenRow) {
+    volOpenRow.classList.remove("vol-open");
+    volOpenRow = null;
+  }
+}
+
+document.addEventListener("pointerdown", (event) => {
+  if (activeTrackRow && !activeTrackRow.contains(event.target)) {
+    activeTrackRow.classList.remove("is-active");
+    activeTrackRow = null;
+  }
+  if (volOpenRow && !volOpenRow.contains(event.target)) {
+    closeVolPopover();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeVolPopover();
+});
+
+function wireVolumeButton(app, track, row, volBtn) {
+  let pressTimer = null;
+  let longPressFired = false;
+
+  const clearPress = () => {
+    if (pressTimer) {
+      clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+  };
+
+  volBtn.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    longPressFired = false;
+    clearPress();
+    pressTimer = setTimeout(() => {
+      longPressFired = true;
+      closeVolPopover();
+      row.classList.add("vol-open");
+      volOpenRow = row;
+    }, LONG_PRESS_MS);
+  });
+
+  volBtn.addEventListener("pointerup", () => {
+    clearPress();
+    if (!longPressFired) toggleMute(app, track, volBtn);
+  });
+
+  volBtn.addEventListener("pointercancel", clearPress);
+}
+
+function nudgeTrack(app, track, deltaSeconds, renderSyncMs, refreshSegment) {
   track.offset = Math.round(((track.offset || 0) + deltaSeconds) * 1000) / 1000;
   app.engine.setTrackOffset(track.id, track.offset);
-  if (renderSyncLabel) renderSyncLabel();
+  renderSyncMs();
+  refreshSegment();
   db.updateTrack(track).catch((error) => {
     reportError("nudgeTrack", error, null, app.notify);
+  });
+}
+
+function resetTrackOffset(app, track, renderSyncMs, refreshSegment) {
+  if ((track.offset || 0) === 0) return;
+  track.offset = 0;
+  app.engine.setTrackOffset(track.id, 0);
+  renderSyncMs();
+  refreshSegment();
+  db.updateTrack(track).catch((error) => {
+    reportError("resetTrackOffset", error, null, app.notify);
   });
 }
 
 function toggleMute(app, track, button) {
   track.muted = !track.muted;
   button.textContent = track.muted ? "🔇" : "🔊";
-  button.classList.toggle("active", track.muted);
+  button.classList.toggle("muted", track.muted);
   app.engine.setMuted(track.id, track.muted);
   db.updateTrack(track).catch((error) => {
     reportError("toggleMute", error, null, app.notify);
   });
 }
 
+function toggleSolo(app, track) {
+  app.soloTrackId = app.soloTrackId === track.id ? null : track.id;
+  app.engine.setSolo(app.soloTrackId);
+  app.elements.trackList.querySelectorAll(".timeline-track").forEach((row) => {
+    const btn = row.querySelector(".timeline-solo .icon-btn");
+    if (!btn) return;
+    btn.classList.toggle("active", row.dataset.trackId === String(app.soloTrackId));
+  });
+}
+
 async function deleteTrack(app, track) {
-  if (!confirm(`Delete "${track.name}"?`)) return;
+  const ok = await confirmDeleteTake(app.elements);
+  if (!ok) return;
   try {
+    if (app.soloTrackId === track.id) {
+      app.soloTrackId = null;
+      app.engine.setSolo(null);
+    }
     await db.deleteTrack(track.id);
     app.engine.removeTrack(track.id);
     app.tracks = app.tracks.filter((entry) => entry.id !== track.id);

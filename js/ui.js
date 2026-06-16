@@ -16,14 +16,15 @@ export function bindElements() {
     recTimer: byId("recTimer"),
     monitorTakesChk: byId("monitorTakesChk"),
     rawMicChk: byId("rawMicChk"),
-    offsetRange: byId("offsetRange"),
+    offsetEarlier: byId("offsetEarlier"),
     offsetReadout: byId("offsetReadout"),
-    offsetReset: byId("offsetReset"),
+    offsetLater: byId("offsetLater"),
+    timelinePanel: byId("timelinePanel"),
+    timelineRulerStart: byId("timelineRulerStart"),
+    timelineRulerEnd: byId("timelineRulerEnd"),
     trackList: byId("trackList"),
+    playhead: byId("playhead"),
     emptyHint: byId("emptyHint"),
-    exportBtn: byId("exportBtn"),
-    importBtn: byId("importBtn"),
-    importFile: byId("importFile"),
     historyBtn: byId("historyBtn"),
     historyPanel: byId("historyPanel"),
     historyList: byId("historyList"),
@@ -36,6 +37,9 @@ export function bindElements() {
     keepTakeModal: byId("keepTakeModal"),
     keepTakeYes: byId("keepTakeYes"),
     keepTakeNo: byId("keepTakeNo"),
+    deleteTakeModal: byId("deleteTakeModal"),
+    deleteTakeYes: byId("deleteTakeYes"),
+    deleteTakeNo: byId("deleteTakeNo"),
   };
 }
 
@@ -91,9 +95,43 @@ export function initTheme(elements) {
 
 export function makeIconButton(label, title, onClick) {
   const button = document.createElement("button");
+  button.type = "button";
   button.className = "icon-btn";
   button.textContent = label;
   button.title = title;
-  button.addEventListener("click", onClick);
+  if (onClick) button.addEventListener("click", onClick);
   return button;
+}
+
+let deleteConfirmPending = false;
+
+export function confirmDeleteTake(elements) {
+  if (deleteConfirmPending) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    deleteConfirmPending = true;
+    elements.deleteTakeModal.hidden = false;
+
+    const finish = (confirmed) => {
+      deleteConfirmPending = false;
+      elements.deleteTakeModal.hidden = true;
+      elements.deleteTakeYes.removeEventListener("click", onYes);
+      elements.deleteTakeNo.removeEventListener("click", onNo);
+      backdrop?.removeEventListener("click", onNo);
+      document.removeEventListener("keydown", onKey);
+      resolve(confirmed);
+    };
+
+    const onYes = () => finish(true);
+    const onNo = () => finish(false);
+    const onKey = (event) => {
+      if (event.key === "Escape") finish(false);
+    };
+
+    const backdrop = elements.deleteTakeModal.querySelector(".modal-backdrop");
+    elements.deleteTakeYes.addEventListener("click", onYes);
+    elements.deleteTakeNo.addEventListener("click", onNo);
+    backdrop?.addEventListener("click", onNo);
+    document.addEventListener("keydown", onKey);
+    elements.deleteTakeNo.focus();
+  });
 }

@@ -58,11 +58,11 @@ export class Player {
     this.elementId = elementId;
     this.yt = null;
     this.videoId = null;
-    this._onState = null;
+    this._stateListeners = [];
   }
 
   onStateChange(cb) {
-    this._onState = cb;
+    this._stateListeners.push(cb);
   }
 
   async load(videoId) {
@@ -70,8 +70,8 @@ export class Player {
     this.videoId = videoId;
 
     if (this.yt) {
-      this.yt.loadVideoById(videoId);
-      this.yt.pauseVideo();
+      this.yt.cueVideoById(videoId);
+      await waitForDuration(this, videoId);
       return;
     }
 
@@ -94,7 +94,9 @@ export class Player {
         events: {
           onReady: () => resolve(),
           onError: (e) => reject(new Error("yt-error:" + e.data)),
-          onStateChange: (e) => this._onState && this._onState(e.data),
+          onStateChange: (e) => {
+            for (const cb of this._stateListeners) cb(e.data);
+          },
         },
       });
     });
@@ -108,6 +110,39 @@ export class Player {
   getState() { return this.yt ? this.yt.getPlayerState() : -1; }
   // { video_id, title, author } — populated once the video metadata loads.
   getVideoData() { return this.yt && this.yt.getVideoData ? this.yt.getVideoData() : null; }
+}
+
+export function isVideoMetadataReady(player, videoId) {
+  const duration = player.getDuration();
+  if (duration <= 0) return false;
+  const dataId = player.getVideoData()?.video_id;
+  return dataId === videoId;
+}
+
+// cueVideoById returns before metadata is ready; poll until the new video is known.
+function waitForDuration(player, videoId, maxMs = 15000) {
+  if (isVideoMetadataReady(player, videoId)) return Promise.resolve();
+
+  return new Promise((resolve) => {
+    const deadline = Date.now() + maxMs;
+    let timer = null;
+
+    const done = () => {
+      if (timer) clearInterval(timer);
+      const idx = player._stateListeners.indexOf(onState);
+      if (idx >= 0) player._stateListeners.splice(idx, 1);
+      resolve();
+    };
+
+    const tryResolve = () => {
+      if (isVideoMetadataReady(player, videoId) || Date.now() >= deadline) done();
+    };
+
+    const onState = () => tryResolve();
+    player._stateListeners.push(onState);
+    timer = setInterval(tryResolve, 50);
+    tryResolve();
+  });
 }
 
 // Re-export the player-state enum values we care about (avoids depending on
