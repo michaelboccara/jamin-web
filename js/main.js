@@ -31,7 +31,7 @@ const els = {
   searchBtn: $("searchBtn"), searchResults: $("searchResults"),
   playBtn: $("playBtn"), recBtn: $("recBtn"), stopAllBtn: $("stopAllBtn"),
   timeReadout: $("timeReadout"), recIndicator: $("recIndicator"), recTimer: $("recTimer"),
-  monitorChk: $("monitorChk"), rawMicChk: $("rawMicChk"),
+  monitorTakesChk: $("monitorTakesChk"), rawMicChk: $("rawMicChk"),
   offsetRange: $("offsetRange"), offsetReadout: $("offsetReadout"), offsetReset: $("offsetReset"),
   trackList: $("trackList"), emptyHint: $("emptyHint"),
   exportBtn: $("exportBtn"), importBtn: $("importBtn"), importFile: $("importFile"),
@@ -335,16 +335,13 @@ els.recBtn.addEventListener("click", async () => {
 
 els.rawMicChk.addEventListener("change", () => {
   recorder.setRawMic(els.rawMicChk.checked);
-  if (els.rawMicChk.checked && els.monitorChk.checked) {
-    els.monitorChk.checked = false;
-    toast("Earphones mode turned off — it fights raw mic recording via browser echo cancellation.");
-  }
 });
 
-els.monitorChk.addEventListener("change", () => {
-  if (els.monitorChk.checked && els.rawMicChk.checked) {
-    els.monitorChk.checked = false;
-    toast("Uncheck raw mic first, or use headphones with browser processing enabled.");
+els.monitorTakesChk.addEventListener("change", () => {
+  if (isRecording && !els.monitorTakesChk.checked) {
+    engine.stop();
+  } else {
+    engine.start();
   }
 });
 
@@ -380,8 +377,11 @@ async function startRecording() {
 
   // Only monitor prior takes when explicitly enabled AND browser processing is on.
   // Raw mic + speaker playback = echo cancellation fights your recording.
-  const monitorTakes = els.monitorChk.checked && !els.rawMicChk.checked;
-  if (monitorTakes) engine.start();
+  const monitorTakes = els.monitorTakesChk.checked;
+  if (monitorTakes) 
+    engine.start();
+  else
+    engine.stop();
 }
 
 async function stopRecording() {
@@ -441,7 +441,7 @@ player.onStateChange((state) => {
     els.playBtn.textContent = "❚❚ Pause";
     // While recording with raw mic (default), never play prior takes — speaker
     // bleed triggers browser echo cancellation that alters the new take.
-    if (isRecording && (els.rawMicChk.checked || !els.monitorChk.checked)) {
+    if (isRecording && !els.monitorTakesChk.checked) {
       engine.stop();
     } else {
       engine.start();
