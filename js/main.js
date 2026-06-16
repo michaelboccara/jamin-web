@@ -13,6 +13,7 @@ import { initSearch } from "./search-ui.js";
 import { initRecording } from "./recording.js";
 import { createTrackListController } from "./tracks-ui.js";
 import { initHistory, renderHistory } from "./history-ui.js";
+import { initExportImport } from "./export-import.js";
 import { initPwa } from "./pwa.js";
 import { initPlayhead } from "./timeline-playhead.js";
 
@@ -60,6 +61,7 @@ initLatencyOffset(app);
 initSearch(app);
 initRecording(app);
 initHistory(app);
+initExportImport(app);
 initPlayhead(app);
 initPwa(app);
 
