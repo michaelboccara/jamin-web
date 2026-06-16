@@ -14,7 +14,6 @@ export const BLOCKED_VIDEO_IDS = new Set([
 
 export const STORAGE_KEYS = {
   lastVideo: "jamin:lastVideo",
-  theme: "jamin:theme",
   latencyOffset: "jamin:latencyOffset",
 };
 

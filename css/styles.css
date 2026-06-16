@@ -47,31 +47,12 @@ html, body {
 
 h1, h2 { margin: 0; font-weight: 650; }
 
-/* ---------- Top bar ---------- */
-.topbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-2);
-  position: sticky;
-  top: 0;
-  z-index: 20;
-}
-.brand { display: flex; align-items: baseline; gap: 10px; }
-.brand .logo { font-size: 22px; }
-.brand h1 { font-size: 20px; letter-spacing: -0.01em; }
-.brand .tag { color: var(--fg-dim); font-size: 13px; }
-.topbar-actions { display: flex; gap: 8px; align-items: center; }
-
-/* ---------- Play-history dropdown ---------- */
-.history-wrap { position: relative; }
+/* ---------- Play-history dropdown (anchored under the search input) ---------- */
 .history-panel {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 6px);
+  left: 0;
   right: 0;
-  width: min(92vw, 360px);
   max-height: min(60vh, 460px);
   overflow-y: auto;
   background: var(--bg-2);
@@ -332,26 +313,13 @@ html[data-theme="light"] .player-rec-row .btn.record {
   justify-self: start;
   margin-left: 8px;
 }
-.rec-offset-row {
-  pointer-events: auto;
-}
 .global-sync-row {
-  width: 30%;
-  min-width: 148px;
-  max-width: 280px;
-  justify-self: center;
+  flex: none;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 2px;
-  padding: 3px 6px;
-  border-radius: 8px;
-  background: rgba(15, 17, 23, 0.88);
-  border: 1px solid var(--border);
+  gap: 8px;
   cursor: default;
-}
-html[data-theme="light"] .global-sync-row {
-  background: rgba(255, 255, 255, 0.92);
 }
 .global-sync-label {
   color: var(--fg-dim);
@@ -363,12 +331,20 @@ html[data-theme="light"] .global-sync-row {
   line-height: 1.2;
 }
 .global-sync-row .timeline-sync {
-  width: 100%;
   justify-content: center;
 }
 .global-sync-row .track-sync-ms {
   cursor: pointer;
   user-select: none;
+}
+
+/* Tight screens: drop the verbose label and side gaps so everything fits. */
+@media (max-width: 560px) {
+  .timeline-ruler { gap: 6px; }
+  .global-sync-label { display: none; }
+  #timelineRulerStart { margin-left: 6px; }
+  #timelineRulerEnd { margin-right: 6px; }
+  .global-sync-row .timeline-sync .icon-btn { width: 26px; height: 26px; }
 }
 .rec-indicator {
   color: var(--record);
@@ -417,21 +393,33 @@ html[data-theme="light"] .global-sync-row {
   cursor: pointer;
 }
 .timeline-ruler {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 34px;
-  padding: 4px 10px;
+  min-height: 40px;
+  padding: 5px 10px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-3);
   cursor: default;
 }
+.timeline-ruler-spacer { flex: 1; min-width: 8px; }
 .timeline-ruler-label {
+  flex: none;
   font-size: 11px;
   color: var(--fg-dim);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+/* Keep the time numbers off the side controls. */
+#timelineRulerStart { margin-left: 16px; }
+#timelineRulerEnd { margin-right: 16px; }
+
+/* Export / import live on the right of the tracks' top row. */
+.ruler-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 .timeline-tracks {
   display: flex;

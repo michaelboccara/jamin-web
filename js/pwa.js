@@ -3,18 +3,23 @@
 import { reportWarning } from "./errors.js";
 
 export function initPwa(app) {
+  // The custom install button was removed with the top bar; browsers still
+  // expose their own native install affordance. Capture the prompt anyway in
+  // case a button is reintroduced, and degrade gracefully when it's absent.
+  const installBtn = app.elements.installBtn;
+
   window.addEventListener("beforeinstallprompt", (event) => {
     event.preventDefault();
     app.deferredInstallPrompt = event;
-    app.elements.installBtn.hidden = false;
+    if (installBtn) installBtn.hidden = false;
   });
 
-  app.elements.installBtn.addEventListener("click", async () => {
+  installBtn?.addEventListener("click", async () => {
     if (!app.deferredInstallPrompt) return;
     app.deferredInstallPrompt.prompt();
     await app.deferredInstallPrompt.userChoice;
     app.deferredInstallPrompt = null;
-    app.elements.installBtn.hidden = true;
+    installBtn.hidden = true;
   });
 
   if ("serviceWorker" in navigator) {

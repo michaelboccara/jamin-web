@@ -3,38 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="theme-color" content="#0f1117" />
+  <meta name="theme-color" content="#0f1117" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f5f6fa" media="(prefers-color-scheme: light)" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <title>Jam-in! &mdash; sing over YouTube</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="icons/icon.svg" />
   <link rel="stylesheet" href="css/styles.css" />
+  <script>
+    // Match the OS colour scheme before first paint to avoid a theme flash.
+    (function () {
+      var prefersLight = window.matchMedia
+        && window.matchMedia("(prefers-color-scheme: light)").matches;
+      document.documentElement.setAttribute("data-theme", prefersLight ? "light" : "dark");
+    })();
+  </script>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="logo" aria-hidden="true">🎤</span>
-      <h1>Jam-in!</h1>
-      <span class="tag">sing over YouTube</span>
-    </div>
-    <div class="topbar-actions">
-      <div class="history-wrap">
-        <button id="historyBtn" class="btn ghost" title="Videos you've recorded over" aria-haspopup="true" aria-expanded="false">🕑 History ▾</button>
-        <div id="historyPanel" class="history-panel" hidden>
-          <div class="history-head">Recorded videos</div>
-          <ul id="historyList" class="history-list"></ul>
-          <p id="historyEmpty" class="history-empty">No recordings yet. Record a take and the video shows up here.</p>
-        </div>
-      </div>
-      <button id="exportBtn" class="btn ghost small" type="button" title="Export tracks for this video as a zip">Export</button>
-      <button id="importBtn" class="btn ghost small" type="button" title="Import a previously exported zip">Import</button>
-      <input id="importFile" type="file" accept=".zip,application/zip" hidden />
-      <button id="installBtn" class="btn ghost" hidden title="Install app">Install</button>
-      <button id="themeBtn" class="btn ghost" title="Toggle dark / light">🌙</button>
-    </div>
-  </header>
-
   <main class="layout">
     <!-- ===== Left / top: player + transport ===== -->
     <section class="stage">
@@ -44,15 +30,19 @@
             id="searchInput"
             class="url-input"
             type="text"
-            placeholder="Search a song to sing over…"
+            placeholder="Search a song, or tap to see your history…"
             aria-label="Search YouTube"
             aria-autocomplete="list"
             aria-expanded="false"
             aria-controls="searchResults"
           />
-          <button class="btn primary" type="submit" id="searchBtn">🔎 Search</button>
         </form>
         <div id="searchResults" class="search-results" role="listbox" hidden></div>
+        <div id="historyPanel" class="history-panel" hidden>
+          <div class="history-head">Recorded videos</div>
+          <ul id="historyList" class="history-list"></ul>
+          <p id="historyEmpty" class="history-empty">No recordings yet. Record a take and the video shows up here.</p>
+        </div>
       </div>
 
       <div class="player-wrap">
@@ -70,9 +60,8 @@
 
       <div id="timelinePanel" class="timeline-panel" hidden>
         <div class="timeline-ruler">
-          <span id="timelineRulerStart" class="timeline-ruler-label">0:00</span>
           <div
-            class="global-sync-row rec-offset-row"
+            class="global-sync-row"
             title="Compensates for recording latency. ◀ if your voice plays late, ▶ if early."
           >
             <span class="global-sync-label">Global sync offset</span>
@@ -82,7 +71,14 @@
               <button id="offsetLater" class="icon-btn" type="button" title="10 ms later">▶</button>
             </div>
           </div>
+          <span id="timelineRulerStart" class="timeline-ruler-label">0:00</span>
+          <span class="timeline-ruler-spacer" aria-hidden="true"></span>
           <span id="timelineRulerEnd" class="timeline-ruler-label">0:00</span>
+          <div class="ruler-actions">
+            <button id="exportBtn" class="btn ghost small" type="button" title="Export tracks for this video as a zip">Export</button>
+            <button id="importBtn" class="btn ghost small" type="button" title="Import a previously exported zip">Import</button>
+            <input id="importFile" type="file" accept=".zip,application/zip" hidden />
+          </div>
         </div>
         <div id="trackList" class="timeline-tracks"></div>
         <div id="playhead" class="timeline-playhead" hidden></div>

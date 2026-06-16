@@ -117,7 +117,9 @@ export function initPlayhead(app) {
     if (playheadDragged || dragging) return;
     if (event.target.closest(".timeline-controls")) return;
     if (event.target.closest(".timeline-playhead")) return;
-    if (event.target.closest(".rec-offset-row")) return;
+    // The ruler row is all controls (sync offset, times, export/import) — never
+    // a play/pause target.
+    if (event.target.closest(".timeline-ruler")) return;
     togglePlayPause();
   });
 

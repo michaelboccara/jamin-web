@@ -1,28 +1,25 @@
-// Play history dropdown — videos that have recorded takes.
+// Play history dropdown — videos that have recorded takes. It shares the
+// search field's dropdown area and is shown (by search-ui.js) when the field
+// is empty.
 
 import * as db from "./db.js";
 import { reportError } from "./errors.js";
 import { escapeHtml, makeIconButton } from "./ui.js";
 import { loadVideo } from "./video.js";
 
-export function initHistory(app) {
+export function showHistory(app) {
   const { elements } = app;
+  elements.historyPanel.hidden = false;
+  elements.searchInput.setAttribute("aria-expanded", "true");
+  renderHistory(app);
+}
 
-  elements.historyBtn.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (elements.historyPanel.hidden) openHistory(app);
-    else closeHistory(elements);
-  });
-
-  document.addEventListener("click", (event) => {
-    if (elements.historyPanel.hidden) return;
-    if (!elements.historyPanel.contains(event.target) && event.target !== elements.historyBtn) {
-      closeHistory(elements);
-    }
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeHistory(elements);
-  });
+export function hideHistory(app) {
+  const { elements } = app;
+  elements.historyPanel.hidden = true;
+  if (elements.searchResults.hidden) {
+    elements.searchInput.setAttribute("aria-expanded", "false");
+  }
 }
 
 export async function renderHistory(app) {
@@ -59,7 +56,7 @@ export async function renderHistory(app) {
 
     loadButton.append(title, meta);
     loadButton.addEventListener("click", () => {
-      closeHistory(elements);
+      hideHistory(app);
       loadVideo(app, entry.videoId);
     });
 
@@ -95,15 +92,4 @@ export async function renderHistory(app) {
     listItem.append(loadButton, link, deleteButton);
     elements.historyList.append(listItem);
   }
-}
-
-function openHistory(app) {
-  app.elements.historyPanel.hidden = false;
-  app.elements.historyBtn.setAttribute("aria-expanded", "true");
-  renderHistory(app);
-}
-
-function closeHistory(elements) {
-  elements.historyPanel.hidden = true;
-  elements.historyBtn.setAttribute("aria-expanded", "false");
 }

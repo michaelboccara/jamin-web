@@ -1,7 +1,5 @@
 // UI helpers: toast, theme, overlay, formatting.
 
-import { STORAGE_KEYS } from "./constants.js";
-
 let toastTimer = null;
 
 export function bindElements() {
@@ -9,7 +7,6 @@ export function bindElements() {
   return {
     searchForm: byId("searchForm"),
     searchInput: byId("searchInput"),
-    searchBtn: byId("searchBtn"),
     searchResults: byId("searchResults"),
     recBtn: byId("recBtn"),
     recIndicator: byId("recIndicator"),
@@ -25,15 +22,12 @@ export function bindElements() {
     trackList: byId("trackList"),
     playhead: byId("playhead"),
     emptyHint: byId("emptyHint"),
-    historyBtn: byId("historyBtn"),
     historyPanel: byId("historyPanel"),
     historyList: byId("historyList"),
     historyEmpty: byId("historyEmpty"),
     exportBtn: byId("exportBtn"),
     importBtn: byId("importBtn"),
     importFile: byId("importFile"),
-    themeBtn: byId("themeBtn"),
-    installBtn: byId("installBtn"),
     overlay: byId("playerOverlay"),
     overlayMsg: byId("playerOverlayMsg"),
     toast: byId("toast"),
@@ -82,16 +76,20 @@ export function setPlayerOverlay(elements, message) {
   elements.overlay.hidden = false;
 }
 
-export function initTheme(elements) {
-  const saved = localStorage.getItem(STORAGE_KEYS.theme) || "dark";
-  document.documentElement.setAttribute("data-theme", saved);
-  elements.themeBtn.textContent = saved === "dark" ? "🌙" : "☀️";
+// Theme always follows the OS. An inline script in index.html sets the initial
+// value before first paint; here we just keep it in sync if the OS toggles.
+export function initTheme() {
+  const media = window.matchMedia
+    ? window.matchMedia("(prefers-color-scheme: light)")
+    : null;
 
-  elements.themeBtn.addEventListener("click", () => {
-    const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    elements.themeBtn.textContent = next === "dark" ? "🌙" : "☀️";
-    localStorage.setItem(STORAGE_KEYS.theme, next);
+  const setTheme = (isLight) =>
+    document.documentElement.setAttribute("data-theme", isLight ? "light" : "dark");
+
+  setTheme(media ? media.matches : false);
+
+  media?.addEventListener?.("change", (event) => {
+    setTheme(event.matches);
     window.dispatchEvent(new CustomEvent("jamin:theme-changed"));
   });
 }
