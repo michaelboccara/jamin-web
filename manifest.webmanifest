@@ -8,11 +8,23 @@
   "orientation": "any",
   "background_color": "#0f1117",
   "theme_color": "#0f1117",
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "file_handlers": [
+    {
+      "action": "./index.html",
+      "accept": {
+        "application/zip": [".jmn"],
+        "application/octet-stream": [".jmn"]
+      }
+    }
+  ],
   "icons": [
     {
-      "src": "icons/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "icons/jamin_icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ]

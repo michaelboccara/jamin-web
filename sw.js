@@ -4,7 +4,7 @@
 // loads offline so an installed PWA opens instantly.
 // ============================================================
 
-const CACHE = "jamin-shell-v11";
+const CACHE = "jamin-shell-v13";
 const SHELL = [
   "./",
   "./index.html",
@@ -21,6 +21,8 @@ const SHELL = [
   "./js/timeline-playhead.js",
   "./js/history-ui.js",
   "./js/export-import.js",
+  "./js/advanced-ui.js",
+  "./js/audio-devices.js",
   "./js/pwa.js",
   "./js/db.js",
   "./js/youtube.js",
@@ -30,7 +32,8 @@ const SHELL = [
   "./js/zip.js",
   "./js/search.js",
   "./manifest.webmanifest",
-  "./icons/icon.svg",
+  "./icons/jamin_icon.png",
+  "./icons/jam-in logo2 alpha.png",
 ];
 
 self.addEventListener("install", (e) => {

@@ -15,6 +15,8 @@ export const BLOCKED_VIDEO_IDS = new Set([
 export const STORAGE_KEYS = {
   lastVideo: "jamin:lastVideo",
   latencyOffset: "jamin:latencyOffset",
+  rawMicOverride: "jamin:rawMicOverride",
+  nudge: "jamin:nudge",
 };
 
 // Sensible starting point for wired output; Bluetooth needs more.

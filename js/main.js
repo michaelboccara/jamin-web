@@ -16,6 +16,12 @@ import { renderHistory } from "./history-ui.js";
 import { initExportImport } from "./export-import.js";
 import { initPwa } from "./pwa.js";
 import { initPlayhead } from "./timeline-playhead.js";
+import { initAdvanced } from "./advanced-ui.js";
+import { initAudioDevices } from "./audio-devices.js";
+
+// Touch-primary devices get Share instead of Export/Import.
+const coarsePointer = window.matchMedia?.("(pointer: coarse)")?.matches;
+document.documentElement.dataset.platform = coarsePointer ? "mobile" : "desktop";
 
 const elements = bindElements();
 const player = new Player("player");
@@ -47,6 +53,7 @@ const app = {
   soloTrackId: null,
   searchSequence: 0,
   deferredInstallPrompt: null,
+  rawMicEnabled: false,
 };
 
 const trackList = createTrackListController(app);
@@ -58,6 +65,8 @@ app.renderHistory = () => renderHistory(app);
 initTheme();
 initTimelineSync(app);
 initLatencyOffset(app);
+initAdvanced(app);
+initAudioDevices(app);
 initSearch(app);
 initRecording(app);
 initExportImport(app);

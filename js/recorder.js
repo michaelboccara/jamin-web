@@ -60,7 +60,7 @@ export class Recorder {
     this.chunks = [];
     this.mimeType = "";
     // When true, skip browser echo cancel / noise suppression / auto-gain.
-    this.rawMic = true;
+    this.rawMic = false;
   }
 
   setRawMic(raw) {

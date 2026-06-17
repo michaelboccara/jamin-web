@@ -7,6 +7,7 @@ import { formatTime } from "./ui.js";
 import { computePeaks } from "./waveform.js";
 import { enableRecordButton } from "./video.js";
 import { STATE } from "./youtube.js";
+import { applyRawMic, getEffectiveRawMic } from "./audio-devices.js";
 
 export function initRecording(app) {
   const { elements } = app;
@@ -15,15 +16,6 @@ export function initRecording(app) {
     if (app.keepTakePending) return;
     if (app.isRecording) await finalizeRecording(app, { pausePlayer: true });
     else await startRecording(app);
-  });
-
-  elements.rawMicChk.addEventListener("change", () => {
-    app.recorder.setRawMic(elements.rawMicChk.checked);
-  });
-
-  elements.monitorTakesChk.addEventListener("change", () => {
-    if (!app.isRecording) return;
-    syncMonitorDuringRecording(app);
   });
 
   app.player.onStateChange((state) => onPlayerStateChange(app, state));
@@ -49,23 +41,22 @@ function onPlayerStateChange(app, state) {
 }
 
 function syncMonitorDuringRecording(app) {
-  if (app.isRecording && !app.elements.monitorTakesChk.checked) {
-    app.engine.stop();
-  } else {
-    app.engine.start();
-  }
+  // Always hear prior takes while recording; when not recording this is still
+  // called on PLAYING so normal playback works.
+  app.engine.start();
 }
 
 async function startRecording(app) {
   if (app.keepTakePending) return;
 
   const { elements, recorder, engine, player } = app;
-  recorder.setRawMic(elements.rawMicChk.checked);
+  applyRawMic(app);
+  const rawMic = getEffectiveRawMic();
 
   // Stop prior-track playback before opening the mic — speaker bleed triggers
   // browser echo cancellation even when raw-mic constraints are requested.
   engine.stop();
-  if (elements.rawMicChk.checked) recorder.resetMic();
+  if (rawMic) recorder.resetMic();
 
   try {
     await recorder.ensureMic();

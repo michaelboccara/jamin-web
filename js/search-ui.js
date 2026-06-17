@@ -93,8 +93,17 @@ export function initSearch(app) {
   input.addEventListener("focus", onFocus);
   input.addEventListener("click", onFocus);
 
+  elements.logoBtn?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    cancelPending();
+    input.value = "";
+    hideSearchResults(elements);
+    showHistory(app);
+    input.focus();
+  });
+
   document.addEventListener("click", (event) => {
-    if (event.target === input) return;
+    if (event.target === input || elements.logoBtn?.contains(event.target)) return;
     if (!elements.searchResults.hidden && !elements.searchResults.contains(event.target)) {
       hideSearchResults(elements);
     }

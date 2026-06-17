@@ -47,6 +47,111 @@ html, body {
 
 h1, h2 { margin: 0; font-weight: 650; }
 
+/* Platform-specific controls (set in main.js via data-platform). */
+html[data-platform="mobile"] .desktop-only { display: none !important; }
+html[data-platform="desktop"] .mobile-only { display: none !important; }
+
+/* ---------- Top bar (Zone 1) ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.topbar .search-wrap {
+  flex: 1;
+  min-width: 0;
+}
+.topbar-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.topbar-icon {
+  flex: none;
+  width: 36px;
+  height: 36px;
+}
+
+/* Long logo button on the left of the search field */
+.topbar-logo-btn {
+  flex: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  line-height: 0;
+  border-radius: 6px;
+}
+.topbar-logo-btn:hover { opacity: 0.8; }
+.topbar-logo {
+  height: 32px;
+  width: auto;
+  display: block;
+  /* Keep the logo crisp without filtering on dark/light themes. */
+}
+.io-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Advanced gear popover */
+.advanced-wrap { position: relative; }
+.advanced-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(92vw, 320px);
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 10px;
+  z-index: 45;
+}
+.advanced-head {
+  color: var(--fg-dim);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 4px 10px;
+}
+.advanced-panel .global-sync-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.advanced-panel .global-sync-label {
+  font-size: 11px;
+}
+.advanced-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--fg-dim);
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 6px 4px;
+}
+.advanced-option input[type="checkbox"] { margin: 0; }
+.advanced-option-label { flex: none; min-width: 64px; }
+.advanced-option select {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
 /* ---------- Play-history dropdown (anchored under the search input) ---------- */
 .history-panel {
   position: absolute;
@@ -150,11 +255,12 @@ h1, h2 { margin: 0; font-weight: 650; }
 .url-input {
   flex: 1;
   min-width: 0;
+  width: 100%;
   background: var(--bg-2);
   border: 1px solid var(--border);
   color: var(--fg);
   border-radius: var(--radius);
-  padding: 12px 14px;
+  padding: 10px 12px;
   font-size: 15px;
 }
 .url-input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
@@ -313,6 +419,34 @@ html[data-theme="light"] .player-rec-row .btn.record {
   justify-self: start;
   margin-left: 8px;
 }
+.player-rec-row .advanced-wrap {
+  grid-column: 1;
+  justify-self: end;
+  margin-right: 8px;
+}
+/* Gear sits beside Record and shares its red, floating look. */
+.rec-gear {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  font-size: 18px;
+  color: var(--record);
+  border: 1px solid var(--record);
+  background: rgba(15, 17, 23, 0.82);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+.rec-gear:hover { background: rgba(15, 17, 23, 0.92); }
+html[data-theme="light"] .rec-gear {
+  background: rgba(255, 255, 255, 0.92);
+}
+/* Popover opens upward, away from the player's bottom edge. */
+.player-rec-row .advanced-panel {
+  top: auto;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: auto;
+}
 .global-sync-row {
   flex: none;
   display: flex;
@@ -338,14 +472,6 @@ html[data-theme="light"] .player-rec-row .btn.record {
   user-select: none;
 }
 
-/* Tight screens: drop the verbose label and side gaps so everything fits. */
-@media (max-width: 560px) {
-  .timeline-ruler { gap: 6px; }
-  .global-sync-label { display: none; }
-  #timelineRulerStart { margin-left: 6px; }
-  #timelineRulerEnd { margin-right: 6px; }
-  .global-sync-row .timeline-sync .icon-btn { width: 26px; height: 26px; }
-}
 .rec-indicator {
   color: var(--record);
   font-weight: 700;
@@ -358,16 +484,6 @@ html[data-theme="light"] .player-rec-row .btn.record {
   border-radius: 999px;
 }
 @keyframes blink { 50% { opacity: 0.25; } }
-
-.monitor-toggle {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  color: var(--fg-dim);
-  font-size: 13px;
-  line-height: 1.4;
-}
-.monitor-toggle input { margin-top: 2px; }
 
 /* ---------- Sync offset ---------- */
 .offset-row { display: flex; align-items: center; gap: 10px; }
@@ -392,35 +508,19 @@ html[data-theme="light"] .player-rec-row .btn.record {
   overflow: hidden;
   cursor: pointer;
 }
-.timeline-ruler {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 5px 10px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-3);
-  cursor: default;
-}
-.timeline-ruler-spacer { flex: 1; min-width: 8px; }
-.timeline-ruler-label {
-  flex: none;
-  font-size: 11px;
+.timeline-time-label {
+  position: absolute;
+  top: 4px;
+  font-size: 10px;
   color: var(--fg-dim);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0.85;
 }
-/* Keep the time numbers off the side controls. */
-#timelineRulerStart { margin-left: 16px; }
-#timelineRulerEnd { margin-right: 16px; }
-
-/* Export / import live on the right of the tracks' top row. */
-.ruler-actions {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
+.timeline-time-start { left: 8px; }
+.timeline-time-end { right: 8px; }
 .timeline-tracks {
   display: flex;
   flex-direction: column;
@@ -484,9 +584,12 @@ html[data-theme="light"] .timeline-controls {
   pointer-events: auto;
 }
 .timeline-sync {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 2px;
+}
+html[data-nudge="on"] .timeline-sync {
+  display: flex;
 }
 .timeline-sync .icon-btn {
   width: 28px;
