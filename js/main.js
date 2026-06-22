@@ -74,7 +74,7 @@ initPlayhead(app);
 initPwa(app);
 
 const recordingError = recordingSupportError();
-if (recordingError) showToast(elements, recordingError, "error");
+if (recordingError) app.notify(recordingError, "error");
 
 loadInitialVideo(app);
 renderHistory(app);
