@@ -3,11 +3,9 @@
 import { STORAGE_KEYS } from "./constants.js";
 import { setRawMicOverride } from "./audio-devices.js";
 
-export function initAdvanced(app) {
-  const { elements } = app;
-
+export function initAdvanced({ elements, bus, trackList, settings }) {
   const savedNudge = localStorage.getItem(STORAGE_KEYS.nudge) === "on";
-  applyNudge(app, savedNudge);
+  applyNudge(elements, savedNudge);
   if (elements.advNudgeChk) elements.advNudgeChk.checked = savedNudge;
 
   elements.advancedBtn?.addEventListener("click", (event) => {
@@ -17,12 +15,12 @@ export function initAdvanced(app) {
   });
 
   elements.advNudgeChk?.addEventListener("change", () => {
-    applyNudge(app, elements.advNudgeChk.checked);
-    app.layoutTrackRows?.();
+    applyNudge(elements, elements.advNudgeChk.checked);
+    trackList.layoutAllTrackRows();
   });
 
   elements.advRawMic?.addEventListener("change", () => {
-    setRawMicOverride(app, elements.advRawMic.value);
+    setRawMicOverride(settings, elements.advRawMic.value);
   });
 
   document.addEventListener("click", (event) => {
@@ -35,13 +33,15 @@ export function initAdvanced(app) {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeAdvanced(elements);
   });
+
+  bus.on("timeline:ready", () => trackList.layoutAllTrackRows());
 }
 
-function applyNudge(app, enabled) {
+function applyNudge(elements, enabled) {
   document.documentElement.dataset.nudge = enabled ? "on" : "off";
   localStorage.setItem(STORAGE_KEYS.nudge, enabled ? "on" : "off");
-  if (app.elements.advNudgeChk) {
-    app.elements.advNudgeChk.checked = enabled;
+  if (elements.advNudgeChk) {
+    elements.advNudgeChk.checked = enabled;
   }
 }
 

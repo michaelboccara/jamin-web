@@ -2,8 +2,7 @@
 
 import { STATE } from "./youtube.js";
 
-export function initPlayhead(app) {
-  const { elements, player } = app;
+export function initPlayhead({ player, elements, bus }) {
   let rafId = null;
   let animating = false;
   let dragging = false;
@@ -121,6 +120,10 @@ export function initPlayhead(app) {
     togglePlayPause();
   });
 
-  app.refreshPlayhead = updatePlayhead;
+  bus.on("playhead:refresh", () => updatePlayhead());
+  bus.on("timeline:ready", () => updatePlayhead());
+  bus.on("video:loaded", () => updatePlayhead());
+  bus.on("tracks:changed", () => updatePlayhead());
+
   updatePlayhead();
 }

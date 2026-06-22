@@ -1,5 +1,4 @@
-// Headphone detection + raw-mic mode. Best-effort on desktop; many mobile
-// browsers don't enumerate audio outputs, so we fall back to raw-mic OFF.
+// Headphone detection + raw-mic mode.
 
 import { STORAGE_KEYS } from "./constants.js";
 import { reportWarning } from "./errors.js";
@@ -9,30 +8,30 @@ const HEADPHONE_HINTS = [
   "bluetooth", "wireless", "buds", "wh-", "sony", "bose",
 ];
 
-let headphonesDetected = null; // true | false | null (unknown)
-let rawMicOverride = "auto"; // auto | on | off
+let headphonesDetected = null;
+let rawMicOverride = "auto";
 
-export function initAudioDevices(app) {
+export function initAudioDevices({ elements, settings }) {
   rawMicOverride = localStorage.getItem(STORAGE_KEYS.rawMicOverride) || "auto";
-  if (app.elements.advRawMic) {
-    app.elements.advRawMic.value = rawMicOverride;
+  if (elements.advRawMic) {
+    elements.advRawMic.value = rawMicOverride;
   }
 
   refreshHeadphoneDetection();
-  applyRawMic(app);
+  applyRawMic(settings);
 
   if (navigator.mediaDevices?.addEventListener) {
     navigator.mediaDevices.addEventListener("devicechange", () => {
       refreshHeadphoneDetection();
-      applyRawMic(app);
+      applyRawMic(settings);
     });
   }
 }
 
-export function setRawMicOverride(app, value) {
+export function setRawMicOverride(settings, value) {
   rawMicOverride = value === "on" || value === "off" ? value : "auto";
   localStorage.setItem(STORAGE_KEYS.rawMicOverride, rawMicOverride);
-  applyRawMic(app);
+  applyRawMic(settings);
 }
 
 export function getRawMicOverride() {
@@ -45,10 +44,8 @@ export function getEffectiveRawMic() {
   return headphonesDetected === true;
 }
 
-export function applyRawMic(app) {
-  const raw = getEffectiveRawMic();
-  app.recorder.setRawMic(raw);
-  app.rawMicEnabled = raw;
+export function applyRawMic(settings) {
+  settings.setRawMic(getEffectiveRawMic());
 }
 
 async function refreshHeadphoneDetection() {

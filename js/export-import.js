@@ -3,39 +3,37 @@
 import * as db from "./db.js";
 import { reportError } from "./errors.js";
 import { buildZip, readZip } from "./zip.js";
-import { loadVideo, captureVideoMeta } from "./video.js";
 
-export function initExportImport(app) {
-  const { elements } = app;
-
-  elements.exportBtn?.addEventListener("click", () => downloadTracks(app));
+export function initExportImport({ elements, trackStore, videoStore, notify }) {
+  elements.exportBtn?.addEventListener("click", () => downloadTracks(trackStore, videoStore, notify));
   elements.importBtn?.addEventListener("click", () => elements.importFile?.click());
-  elements.shareBtn?.addEventListener("click", () => shareTracks(app));
+  elements.shareBtn?.addEventListener("click", () => shareTracks(trackStore, videoStore, notify));
   elements.importFile?.addEventListener("change", () => {
     const file = elements.importFile.files[0];
     elements.importFile.value = "";
-    if (file) importFromFile(app, file);
+    if (file) importFromFile(file, trackStore, videoStore, notify);
   });
 
-  initFileHandling(app);
+  initFileHandling(trackStore, videoStore, notify);
 }
 
-export function initFileHandling(app) {
+function initFileHandling(trackStore, videoStore, notify) {
   if (!("launchQueue" in window)) return;
   window.launchQueue.setConsumer(async (launchParams) => {
     const handle = launchParams.files?.[0];
     if (!handle) return;
     try {
       const file = await handle.getFile();
-      await importFromFile(app, file);
+      await importFromFile(file, trackStore, videoStore, notify);
     } catch (error) {
-      reportError("launchQueue", error, "Could not open file.", app.notify);
+      reportError("launchQueue", error, "Could not open file.", notify);
     }
   });
 }
 
-async function buildTracksFile(app) {
-  const { tracks, currentVideoId } = app;
+async function buildTracksFile(trackStore, videoStore) {
+  const tracks = trackStore.getTracks();
+  const currentVideoId = videoStore.getVideoId();
   if (!tracks.length) return null;
 
   const metadata = { videoId: currentVideoId, exportedAt: Date.now(), version: 1, tracks: [] };
@@ -79,15 +77,14 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 
-async function downloadTracks(app) {
-  const { notify } = app;
-  if (!app.tracks.length) {
+async function downloadTracks(trackStore, videoStore, notify) {
+  if (!trackStore.getTracks().length) {
     notify("No tracks to export for this video.");
     return;
   }
 
   try {
-    const file = await buildTracksFile(app);
+    const file = await buildTracksFile(trackStore, videoStore);
     if (!file) return;
     downloadBlob(file, file.name);
     notify("Exported.", "success");
@@ -96,21 +93,21 @@ async function downloadTracks(app) {
   }
 }
 
-async function shareTracks(app) {
-  const { notify } = app;
-  if (!app.tracks.length) {
+async function shareTracks(trackStore, videoStore, notify) {
+  if (!trackStore.getTracks().length) {
     notify("No tracks to share for this video.");
     return;
   }
 
   try {
-    const file = await buildTracksFile(app);
+    const file = await buildTracksFile(trackStore, videoStore);
     if (!file) return;
 
+    const currentVideoId = videoStore.getVideoId();
     const payload = {
       files: [file],
       title: "Jam-in! takes",
-      text: `Voice takes for ${app.currentVideoId}`,
+      text: `Voice takes for ${currentVideoId}`,
     };
     if (navigator.canShare?.(payload)) {
       await navigator.share(payload);
@@ -125,8 +122,7 @@ async function shareTracks(app) {
   }
 }
 
-export async function importFromFile(app, file) {
-  const { currentVideoId, notify, renderHistory } = app;
+async function importFromFile(file, trackStore, videoStore, notify) {
   if (!file) return;
 
   try {
@@ -135,6 +131,7 @@ export async function importFromFile(app, file) {
     if (!metadataBytes) throw new Error("metadata.json missing");
 
     const metadata = JSON.parse(new TextDecoder().decode(metadataBytes));
+    const currentVideoId = videoStore.getVideoId();
     const targetVideoId = metadata.videoId || currentVideoId;
 
     for (const entry of metadata.tracks) {
@@ -158,13 +155,12 @@ export async function importFromFile(app, file) {
 
     notify("Imported.", "success");
     if (targetVideoId === currentVideoId) {
-      await loadVideo(app, currentVideoId);
+      await videoStore.load(currentVideoId);
     } else if (confirm("Imported takes belong to a different video. Load it now?")) {
-      await loadVideo(app, targetVideoId);
+      await videoStore.load(targetVideoId);
     } else {
-      captureVideoMeta(app, targetVideoId);
+      videoStore.captureMeta(targetVideoId);
     }
-    renderHistory();
   } catch (error) {
     reportError("importFromFile", error, `Import failed: ${error.message}`, notify);
   }

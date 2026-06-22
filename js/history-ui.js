@@ -1,35 +1,43 @@
-// Play history dropdown — videos that have recorded takes. It shares the
-// search field's dropdown area and is shown (by search-ui.js) when the field
-// is empty.
+// Play history dropdown — videos that have recorded takes.
 
 import * as db from "./db.js";
 import { reportError } from "./errors.js";
 import { escapeHtml, makeIconButton } from "./ui.js";
-import { loadVideo } from "./video.js";
 
-export function showHistory(app) {
-  const { elements } = app;
-  elements.historyPanel.hidden = false;
-  elements.searchInput.setAttribute("aria-expanded", "true");
-  renderHistory(app);
+let historyDeps = null;
+
+export function initHistory(deps) {
+  historyDeps = deps;
+  deps.bus.on("video:meta-updated", () => renderHistory());
+  deps.bus.on("tracks:changed", () => renderHistory());
+  deps.bus.on("video:loaded", () => renderHistory());
 }
 
-export function hideHistory(app) {
-  const { elements } = app;
+export function showHistory() {
+  const { elements } = historyDeps;
+  elements.historyPanel.hidden = false;
+  elements.searchInput.setAttribute("aria-expanded", "true");
+  renderHistory();
+}
+
+export function hideHistory() {
+  const { elements } = historyDeps;
   elements.historyPanel.hidden = true;
   if (elements.searchResults.hidden) {
     elements.searchInput.setAttribute("aria-expanded", "false");
   }
 }
 
-export async function renderHistory(app) {
-  const { elements, currentVideoId } = app;
+export async function renderHistory() {
+  if (!historyDeps) return;
+  const { elements, videoStore, trackStore, notify } = historyDeps;
+  const currentVideoId = videoStore.getVideoId();
   let entries = [];
 
   try {
     entries = await db.getVideosWithRecordings();
   } catch (error) {
-    reportError("renderHistory", error, null, app.notify);
+    reportError("renderHistory", error, null, notify);
   }
 
   elements.historyList.innerHTML = "";
@@ -56,8 +64,8 @@ export async function renderHistory(app) {
 
     loadButton.append(title, meta);
     loadButton.addEventListener("click", () => {
-      hideHistory(app);
-      loadVideo(app, entry.videoId);
+      hideHistory();
+      videoStore.load(entry.videoId);
     });
 
     const link = document.createElement("a");
@@ -77,14 +85,12 @@ export async function renderHistory(app) {
       try {
         await db.deleteVideo(entry.videoId);
         if (entry.videoId === currentVideoId) {
-          app.engine.clear();
-          app.tracks = [];
-          app.renderTracks();
+          await trackStore.clearForVideoDelete();
         }
-        await renderHistory(app);
-        app.notify("Removed from history.");
+        await renderHistory();
+        notify("Removed from history.");
       } catch (error) {
-        reportError("deleteVideo", error, "Could not remove from history.", app.notify);
+        reportError("deleteVideo", error, "Could not remove from history.", notify);
       }
     });
     deleteButton.classList.add("danger", "history-del");

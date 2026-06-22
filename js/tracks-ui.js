@@ -1,7 +1,7 @@
 // Timeline track UI: positioned waveforms, segment bounds, hover controls.
 
-import * as db from "./db.js";
 import { reportError } from "./errors.js";
+import { effectiveStartTime } from "./core/sync-math.js";
 import { drawTimelineWaveform } from "./waveform.js";
 import { confirmDeleteTake, formatTime, getAccentColor, makeIconButton } from "./ui.js";
 
@@ -12,11 +12,11 @@ const CONTROLS_GAP_PX = 4;
 let activeTrackRow = null;
 let volOpenRow = null;
 
-export function createTrackListController(app) {
+export function createTrackListController({ trackStore, settings, videoStore, player, elements, bus, notify }) {
   function getTimelineMetrics() {
     return {
-      videoDuration: app.player.getDuration() || 0,
-      globalOffset: app.latencyOffset || 0,
+      videoDuration: player.getDuration() || 0,
+      globalOffset: settings.getLatencyOffset(),
     };
   }
 
@@ -25,7 +25,7 @@ export function createTrackListController(app) {
     if (videoDuration <= 0) {
       return { segmentLeft: 0, segmentWidth: 0 };
     }
-    const effStart = track.startTime - globalOffset - (track.offset || 0);
+    const effStart = effectiveStartTime(track, globalOffset);
     return {
       segmentLeft: effStart / videoDuration,
       segmentWidth: (track.duration || 0) / videoDuration,
@@ -33,8 +33,7 @@ export function createTrackListController(app) {
   }
 
   function updateRuler() {
-    const { elements } = app;
-    const duration = app.player.getDuration() || 0;
+    const duration = player.getDuration() || 0;
     if (elements.timelineRulerStart) {
       elements.timelineRulerStart.textContent = formatTime(0);
     }
@@ -74,34 +73,44 @@ export function createTrackListController(app) {
   }
 
   function layoutAllTrackRows() {
-    app.elements.trackList.querySelectorAll(".timeline-track").forEach(layoutTrackRow);
+    elements.trackList.querySelectorAll(".timeline-track").forEach(layoutTrackRow);
   }
 
   function renderTracks() {
-    const { elements, tracks } = app;
+    const tracks = trackStore.getTracks();
     elements.trackList.innerHTML = "";
     const hasTracks = tracks.length > 0;
     elements.emptyHint.hidden = hasTracks;
-    elements.timelinePanel.hidden = !app.currentVideoId;
+    elements.timelinePanel.hidden = !videoStore.getVideoId();
 
     updateRuler();
 
     const sorted = [...tracks].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     for (const track of sorted) {
-      elements.trackList.append(buildTrackElement(app, track, getTimelineMetrics, getTrackSegment, layoutTrackRow));
+      elements.trackList.append(
+        buildTrackElement({
+          track,
+          trackStore,
+          getTimelineMetrics,
+          getTrackSegment,
+          layoutTrackRow,
+          notify,
+        })
+      );
     }
 
     requestAnimationFrame(() => {
       layoutAllTrackRows();
-      app.refreshPlayhead?.();
+      bus.emit("playhead:refresh");
     });
   }
 
   function redrawWaveforms() {
     const metrics = getTimelineMetrics();
     const color = getAccentColor();
-    app.elements.trackList.querySelectorAll("canvas.timeline-wave").forEach((canvas) => {
-      const track = app.tracks.find((t) => t.id === canvas.dataset.trackId);
+    const tracks = trackStore.getTracks();
+    elements.trackList.querySelectorAll("canvas.timeline-wave").forEach((canvas) => {
+      const track = tracks.find((t) => t.id === canvas.dataset.trackId);
       if (!track) return;
       const segment = getTrackSegment(track, metrics);
       canvas._segment = segment;
@@ -109,13 +118,21 @@ export function createTrackListController(app) {
     });
     updateRuler();
     layoutAllTrackRows();
-    app.refreshPlayhead?.();
+    bus.emit("playhead:refresh");
   }
+
+  bus.on("tracks:changed", () => renderTracks());
+  bus.on("video:loaded", () => renderTracks());
+  bus.on("settings:latency-changed", () => redrawWaveforms());
+  bus.on("timeline:ready", () => {
+    redrawWaveforms();
+    layoutAllTrackRows();
+  });
 
   return { renderTracks, redrawWaveforms, layoutAllTrackRows };
 }
 
-function buildTrackElement(app, track, getTimelineMetrics, getTrackSegment, layoutTrackRow) {
+function buildTrackElement({ track, trackStore, getTimelineMetrics, getTrackSegment, layoutTrackRow, notify }) {
   const row = document.createElement("div");
   row.className = "timeline-track";
   row.dataset.trackId = track.id;
@@ -153,10 +170,10 @@ function buildTrackElement(app, track, getTimelineMetrics, getTrackSegment, layo
   };
 
   const earlierBtn = makeIconButton("◀", "Nudge 10 ms earlier", () => {
-    nudgeTrack(app, track, -NUDGE_SEC, renderSyncMs, refreshSegment);
+    nudgeTrack(trackStore, track, -NUDGE_SEC, renderSyncMs, refreshSegment, notify);
   });
   const laterBtn = makeIconButton("▶", "Nudge 10 ms later", () => {
-    nudgeTrack(app, track, NUDGE_SEC, renderSyncMs, refreshSegment);
+    nudgeTrack(trackStore, track, NUDGE_SEC, renderSyncMs, refreshSegment, notify);
   });
   renderSyncMs();
   sync.append(earlierBtn, syncMs, laterBtn);
@@ -164,7 +181,7 @@ function buildTrackElement(app, track, getTimelineMetrics, getTrackSegment, layo
   syncMs.addEventListener("dblclick", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    resetTrackOffset(app, track, renderSyncMs, refreshSegment);
+    resetTrackOffset(trackStore, track, renderSyncMs, refreshSegment, notify);
   });
 
   const volWrap = document.createElement("div");
@@ -189,29 +206,28 @@ function buildTrackElement(app, track, getTimelineMetrics, getTrackSegment, layo
   volSlider.setAttribute("aria-label", "Track volume");
   volSlider.addEventListener("input", () => {
     track.volume = parseFloat(volSlider.value);
-    if (!track.muted) app.engine.setVolume(track.id, track.volume);
+    trackStore.setTrackVolume(track, track.volume, { persist: false });
   });
   volSlider.addEventListener("change", () => {
-    db.updateTrack(track).catch((error) => {
-      reportError("updateTrack", error, null, app.notify);
+    trackStore.setTrackVolume(track, track.volume).catch((error) => {
+      reportError("updateTrack", error, null, notify);
     });
   });
-  volPopover.append(volSlider);
   volWrap.append(volBtn, volPopover);
-  wireVolumeButton(app, track, row, volBtn);
+  wireVolumeButton(trackStore, track, row, volBtn, notify);
 
   const soloWrap = document.createElement("div");
   soloWrap.className = "timeline-solo";
   const soloBtn = makeIconButton("S", "Solo — hear only this take", () => {
-    toggleSolo(app, track);
+    toggleSolo(trackStore, elements, track);
   });
-  if (app.soloTrackId === track.id) soloBtn.classList.add("active");
+  if (trackStore.getSoloId() === track.id) soloBtn.classList.add("active");
   soloWrap.append(soloBtn);
 
   const delWrap = document.createElement("div");
   delWrap.className = "timeline-del";
   const deleteBtn = makeIconButton("🗑", "Delete take", () => {
-    deleteTrack(app, track);
+    deleteTrack(trackStore, elements, track, notify);
   });
   deleteBtn.classList.add("danger");
   delWrap.append(deleteBtn);
@@ -276,7 +292,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeVolPopover();
 });
 
-function wireVolumeButton(app, track, row, volBtn) {
+function wireVolumeButton(trackStore, track, row, volBtn, notify) {
   let pressTimer = null;
   let longPressFired = false;
 
@@ -301,68 +317,58 @@ function wireVolumeButton(app, track, row, volBtn) {
 
   volBtn.addEventListener("pointerup", () => {
     clearPress();
-    if (!longPressFired) toggleMute(app, track, volBtn);
+    if (!longPressFired) toggleMute(trackStore, track, volBtn, notify);
   });
 
   volBtn.addEventListener("pointercancel", clearPress);
 }
 
-function nudgeTrack(app, track, deltaSeconds, renderSyncMs, refreshSegment) {
-  track.offset = Math.round(((track.offset || 0) + deltaSeconds) * 1000) / 1000;
-  app.engine.setTrackOffset(track.id, track.offset);
-  renderSyncMs();
-  refreshSegment();
-  db.updateTrack(track).catch((error) => {
-    reportError("nudgeTrack", error, null, app.notify);
+function nudgeTrack(trackStore, track, deltaSeconds, renderSyncMs, refreshSegment, notify) {
+  const next = (track.offset || 0) + deltaSeconds;
+  trackStore.setTrackOffset(track, next).then(() => {
+    renderSyncMs();
+    refreshSegment();
+  }).catch((error) => {
+    reportError("nudgeTrack", error, null, notify);
   });
 }
 
-function resetTrackOffset(app, track, renderSyncMs, refreshSegment) {
+function resetTrackOffset(trackStore, track, renderSyncMs, refreshSegment, notify) {
   if ((track.offset || 0) === 0) return;
-  track.offset = 0;
-  app.engine.setTrackOffset(track.id, 0);
-  renderSyncMs();
-  refreshSegment();
-  db.updateTrack(track).catch((error) => {
-    reportError("resetTrackOffset", error, null, app.notify);
+  trackStore.setTrackOffset(track, 0).then(() => {
+    renderSyncMs();
+    refreshSegment();
+  }).catch((error) => {
+    reportError("resetTrackOffset", error, null, notify);
   });
 }
 
-function toggleMute(app, track, button) {
-  track.muted = !track.muted;
-  button.textContent = track.muted ? "🔇" : "🔊";
-  button.classList.toggle("muted", track.muted);
-  app.engine.setMuted(track.id, track.muted);
-  db.updateTrack(track).catch((error) => {
-    reportError("toggleMute", error, null, app.notify);
+function toggleMute(trackStore, track, button, notify) {
+  trackStore.setTrackMuted(track, !track.muted).then(() => {
+    button.textContent = track.muted ? "🔇" : "🔊";
+    button.classList.toggle("muted", track.muted);
+  }).catch((error) => {
+    reportError("toggleMute", error, null, notify);
   });
 }
 
-function toggleSolo(app, track) {
-  app.soloTrackId = app.soloTrackId === track.id ? null : track.id;
-  app.engine.setSolo(app.soloTrackId);
-  app.elements.trackList.querySelectorAll(".timeline-track").forEach((row) => {
-    const btn = row.querySelector(".timeline-solo .icon-btn");
+function toggleSolo(trackStore, elements, track) {
+  const next = trackStore.getSoloId() === track.id ? null : track.id;
+  trackStore.setSolo(next);
+  elements.trackList.querySelectorAll(".timeline-track").forEach((trackRow) => {
+    const btn = trackRow.querySelector(".timeline-solo .icon-btn");
     if (!btn) return;
-    btn.classList.toggle("active", row.dataset.trackId === String(app.soloTrackId));
+    btn.classList.toggle("active", trackRow.dataset.trackId === String(next));
   });
 }
 
-async function deleteTrack(app, track) {
-  const ok = await confirmDeleteTake(app.elements);
+async function deleteTrack(trackStore, elements, track, notify) {
+  const ok = await confirmDeleteTake(elements);
   if (!ok) return;
   try {
-    if (app.soloTrackId === track.id) {
-      app.soloTrackId = null;
-      app.engine.setSolo(null);
-    }
-    await db.deleteTrack(track.id);
-    app.engine.removeTrack(track.id);
-    app.tracks = app.tracks.filter((entry) => entry.id !== track.id);
-    app.renderTracks();
-    app.renderHistory();
-    app.notify("Take deleted.");
+    await trackStore.remove(track.id);
+    notify("Take deleted.");
   } catch (error) {
-    reportError("deleteTrack", error, "Could not delete this take.", app.notify);
+    reportError("deleteTrack", error, "Could not delete this take.", notify);
   }
 }

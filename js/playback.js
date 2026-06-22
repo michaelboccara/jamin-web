@@ -49,6 +49,7 @@
 // ============================================================
 
 import { reportWarning } from "./errors.js";
+import { effectiveStartTime } from "./core/sync-math.js";
 
 const SEEK_THRESHOLD = 0.6;  // seconds — bigger than this == a jump/seek
 const DRIFT_THRESHOLD = 0.18; // seconds — gentle re-anchor above this
@@ -150,7 +151,7 @@ export class PlaybackEngine {
   // Video time at which this clip's first sample should sound, after
   // subtracting the latency compensation (clips were recorded late).
   _effStart(t) {
-    return t.startTime - this.globalOffset - (t.offset || 0);
+    return effectiveStartTime(t, this.globalOffset);
   }
 
   removeTrack(id) {
