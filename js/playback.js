@@ -240,12 +240,14 @@ export class PlaybackEngine {
 
     if (Math.abs(error) > SEEK_THRESHOLD) {
       // The user seeked (or a big stall): rebuild the mix at the new position.
+      console.log("SEEKED to ", actual);
       this._stopAllSources();
       this._anchor();
       this._scheduleAll();
     } else if (Math.abs(error) > DRIFT_THRESHOLD) {
       // Gentle skew: re-anchor so future scheduling stays accurate, and make
       // sure any clip that *should* be sounding now actually is.
+      console.log("DRIFTED from ", expected, " to ", actual);
       this._anchor();
       for (const t of this.tracks) {
         const videoNow = this.anchorVideo;

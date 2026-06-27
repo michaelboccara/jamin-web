@@ -1,0 +1,41 @@
+---
+description: app wiring — stores, bus, no god-objects
+alwaysApply: true
+---
+
+# Architecture — jamin-web
+
+Read `ARCHITECTURE.md` before adding state, new modules, or cross-module behavior.
+
+## Composition root
+
+- Only `js/main.js` may wire the full object graph (services + stores + init calls).
+- Services are created once: `player`, `recorder`, `engine`, `elements`, `notify`.
+- Domain state lives in `js/core/*` stores — not on a shared `app` / `context` object.
+
+## Do NOT
+
+- Create or pass a god-object (`app`, `ctx`, `state`) into `init*` functions or UI modules.
+- Mutate tracks from UI/feature code via direct `db.*` + `engine.*` calls (except documented exceptions like import).
+- Attach render callbacks to a global object (`app.renderTracks = …`).
+- Have stores import DOM modules or call `render*` directly.
+
+## DO
+
+- Give each `init*` / factory **narrow dependencies** only what it needs:
+  `{ trackStore, videoStore, settings, bus, notify, elements, player, … }`.
+- Route **all track changes** through `trackStore` (IndexedDB → engine → in-memory → `tracks:changed`).
+- Refresh UI by **subscribing to the event bus** (`tracks:changed`, `video:loaded`, `settings:latency-changed`, `timeline:ready`, …).
+- Put shared sync math in `js/core/sync-math.js` — do not duplicate formulas in UI and engine.
+- When adding a new file under `js/`, update `sw.js` `SHELL` and bump the cache version.
+
+## SOLID (how we mean it here)
+
+- **S** — One store/module per domain (`trackStore`, `videoStore`, `recordingSession`, …).
+- **O** — Extend behavior via bus events and new subscribers, not by growing a central object.
+- **I** — Small parameter objects; never `initFeature(app)`.
+- **D** — Feature code depends on store APIs; `main.js` wires concrete implementations.
+
+## Smell check before finishing
+
+If a change adds `something.someField = …` or `something.doRender()` on an object passed to more than one module, stop and move that state or side effect into the right store or bus event.

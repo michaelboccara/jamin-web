@@ -6,7 +6,7 @@ let apiPromise = null;
 
 // Load the YouTube IFrame API exactly once. The API signals readiness by
 // calling the global window.onYouTubeIframeAPIReady, so we hook into that.
-export function loadYouTubeAPI() {
+function loadYouTubeAPI() {
   if (apiPromise) return apiPromise;
   apiPromise = new Promise((resolve) => {
     if (window.YT && window.YT.Player) {
@@ -70,7 +70,7 @@ export class Player {
     this.videoId = videoId;
 
     if (this.yt) {
-      this.yt.cueVideoById(videoId);
+      this.yt.loadVideoById(videoId);
       await waitForDuration(this, videoId);
       return;
     }
@@ -120,10 +120,10 @@ export function isVideoMetadataReady(player, videoId) {
 }
 
 // cueVideoById returns before metadata is ready; poll until the new video is known.
-function waitForDuration(player, videoId, maxMs = 15000) {
-  if (isVideoMetadataReady(player, videoId)) return Promise.resolve();
+async function waitForDuration(player, videoId, maxMs = 15000) {
+  if (isVideoMetadataReady(player, videoId)) return;
 
-  return new Promise((resolve) => {
+  await new Promise((resolve) => {
     const deadline = Date.now() + maxMs;
     let timer = null;
 

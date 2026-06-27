@@ -1,46 +1,50 @@
-// UI helpers: toast, theme, overlay, formatting.
+// UI helpers: toast, theme, playerOverlay, formatting.
 
 let toastTimer = null;
 
 export function bindElements() {
-  const byId = (id) => document.getElementById(id);
   return {
-    searchForm: byId("searchForm"),
-    searchInput: byId("searchInput"),
-    searchResults: byId("searchResults"),
-    logoBtn: byId("logoBtn"),
-    advancedBtn: byId("advancedBtn"),
-    advancedPanel: byId("advancedPanel"),
-    advNudgeChk: byId("advNudgeChk"),
-    advRawMic: byId("advRawMic"),
-    recBtn: byId("recBtn"),
-    recIndicator: byId("recIndicator"),
-    recTimer: byId("recTimer"),
-    offsetEarlier: byId("offsetEarlier"),
-    offsetReadout: byId("offsetReadout"),
-    offsetLater: byId("offsetLater"),
-    timelinePanel: byId("timelinePanel"),
-    timelineRulerStart: byId("timelineRulerStart"),
-    timelineRulerEnd: byId("timelineRulerEnd"),
-    trackList: byId("trackList"),
-    playhead: byId("playhead"),
-    emptyHint: byId("emptyHint"),
-    historyPanel: byId("historyPanel"),
-    historyList: byId("historyList"),
-    historyEmpty: byId("historyEmpty"),
-    exportBtn: byId("exportBtn"),
-    importBtn: byId("importBtn"),
-    shareBtn: byId("shareBtn"),
-    importFile: byId("importFile"),
-    overlay: byId("playerOverlay"),
-    overlayMsg: byId("playerOverlayMsg"),
-    toast: byId("toast"),
-    keepTakeModal: byId("keepTakeModal"),
-    keepTakeYes: byId("keepTakeYes"),
-    keepTakeNo: byId("keepTakeNo"),
-    deleteTakeModal: byId("deleteTakeModal"),
-    deleteTakeYes: byId("deleteTakeYes"),
-    deleteTakeNo: byId("deleteTakeNo"),
+    ...[
+      "searchForm",
+      "searchInput",
+      "searchResults",
+      "logoBtn",
+      "advancedBtn",
+      "advancedPanel",
+      "advNudgeChk",
+      "advRawMic",
+      "recBtn",
+      "recIndicator",
+      "recTimer",
+      "offsetEarlier",
+      "offsetReadout",
+      "offsetLater",
+      "timelinePanel",
+      "timelineRulerStart",
+      "timelineRulerEnd",
+      "trackList",
+      "playhead",
+      "emptyHint",
+      "historyPanel",
+      "historyList",
+      "historyEmpty",
+      "exportBtn",
+      "importBtn",
+      "shareBtn",
+      "importFile",
+      "playerOverlay",
+      "playerOverlayMsg",
+      "toast",
+      "keepTakeModal",
+      "keepTakeYes",
+      "keepTakeNo",
+      "deleteTakeModal",
+      "deleteTakeYes",
+      "deleteTakeNo"
+    ].reduce((acc, key) => {
+      acc[key] = document.getElementById(key);
+      return acc;
+    }, {}),
   };
 }
 
@@ -73,11 +77,11 @@ export function getAccentColor() {
 
 export function setPlayerOverlay(elements, message) {
   if (!message) {
-    elements.overlay.hidden = true;
+    elements.playerOverlay.hidden = true;
     return;
   }
-  elements.overlayMsg.textContent = message;
-  elements.overlay.hidden = false;
+  elements.playerOverlayMsg.textContent = message;
+  elements.playerOverlay.hidden = false;
 }
 
 // Theme always follows the OS. An inline script in index.html sets the initial

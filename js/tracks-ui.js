@@ -94,6 +94,7 @@ export function createTrackListController({ trackStore, settings, videoStore, pl
           getTimelineMetrics,
           getTrackSegment,
           layoutTrackRow,
+          elements,
           notify,
         })
       );
@@ -132,7 +133,7 @@ export function createTrackListController({ trackStore, settings, videoStore, pl
   return { renderTracks, redrawWaveforms, layoutAllTrackRows };
 }
 
-function buildTrackElement({ track, trackStore, getTimelineMetrics, getTrackSegment, layoutTrackRow, notify }) {
+function buildTrackElement({ track, trackStore, getTimelineMetrics, getTrackSegment, layoutTrackRow, elements, notify }) {
   const row = document.createElement("div");
   row.className = "timeline-track";
   row.dataset.trackId = track.id;

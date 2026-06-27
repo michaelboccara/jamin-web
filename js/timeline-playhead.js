@@ -35,9 +35,11 @@ export function initPlayhead({ player, elements, bus }) {
       if (elements.playhead) elements.playhead.hidden = true;
       return;
     }
-    const t = Math.max(0, Math.min(duration, player.getCurrentTime()));
-    elements.playhead.style.left = `${(t / duration) * 100}%`;
-    elements.playhead.hidden = elements.timelinePanel.hidden;
+    if (player.getState() !== STATE.BUFFERING) {
+      const t = Math.max(0, Math.min(duration, player.getCurrentTime()));
+      elements.playhead.style.left = `${(t / duration) * 100}%`;
+      elements.playhead.hidden = elements.timelinePanel.hidden;
+    }
   }
 
   function tick() {
@@ -59,17 +61,7 @@ export function initPlayhead({ player, elements, bus }) {
   }
 
   player.onStateChange((state) => {
-    if (state === STATE.PLAYING) setAnimating(true);
-    else if (
-      state === STATE.PAUSED ||
-      state === STATE.ENDED ||
-      state === STATE.CUED ||
-      state === STATE.UNSTARTED
-    ) {
-      setAnimating(false);
-    } else if (state === STATE.BUFFERING) {
-      setAnimating(false);
-    }
+    setAnimating(state === STATE.PLAYING);
   });
 
   elements.playhead?.addEventListener("pointerdown", (event) => {
